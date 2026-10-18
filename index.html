@@ -165,6 +165,22 @@ input[type=range]{width:100%;accent-color:var(--candle);height:28px}
 .seq-foot{display:grid;grid-template-columns:minmax(0,1fr) minmax(170px,240px);gap:14px;align-items:end}
 .seq-foot .tools > span{font-size:.78rem;color:var(--muted);margin-right:2px}
 
+/* Acordes da música */
+.prog-list{display:flex;flex-wrap:wrap;gap:8px;min-height:56px;align-items:stretch}
+.prog-empty{color:var(--muted);font-size:.86rem;align-self:center}
+.pchord{display:flex;align-items:stretch;background:var(--surface-2);border:1px solid var(--line);border-radius:12px;transition:border-color .2s,background .2s}
+.pchord .go{background:none;border:0;padding:7px 4px 7px 14px;display:flex;flex-direction:column;align-items:flex-start;min-width:3.4em;touch-action:manipulation}
+.pchord .go b{font-family:var(--f-display);font-weight:700;font-size:1.35rem;line-height:1.1}
+.pchord .go small{font-family:var(--f-mono);font-size:.68rem;color:var(--muted)}
+.pchord .x{background:none;border:0;color:#5d6188;padding:0 10px;font-size:1rem}
+.pchord .x:hover{color:var(--danger)}
+.pchord.cur{border-color:var(--candle);background:var(--candle-soft)}
+.pchord.cur b{color:var(--candle)}
+#progPal .btn small{font-family:var(--f-mono);font-size:.7rem;color:var(--muted);margin-left:3px}
+.prog-foot{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;justify-content:space-between}
+.prog-foot .lbl,#progPresets > span{font-size:.78rem;color:var(--muted)}
+.note kbd{font-family:var(--f-mono);font-size:.72rem;border:1px solid var(--line);border-radius:4px;padding:0 4px;color:var(--fg)}
+
 /* MIDI */
 .midi{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:14px}
 .midi-status{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:.9rem}
@@ -225,7 +241,7 @@ dialog h3{margin:0;font-family:var(--f-display);font-size:1.2rem}
 <div class="wrap">
   <header>
     <h1>Pads de <span>Louvor</span></h1>
-    <div class="hint desk">Teclado: <kbd>A W S E D F T G Y H U J</kbd> = tons · <kbd>1</kbd>–<kbd>0</kbd> = timbres · <kbd>←</kbd> <kbd>→</kbd> = músicas · <kbd>Espaço</kbd> = parar</div>
+    <div class="hint desk">Teclado: <kbd>A W S E D F T G Y H U J</kbd> = tons · <kbd>1</kbd>–<kbd>0</kbd> = timbres · <kbd>←</kbd> <kbd>→</kbd> = músicas · <kbd>↑</kbd> <kbd>↓</kbd> = acordes · <kbd>Espaço</kbd> = parar</div>
   </header>
 
   <div class="stage" id="stage">
@@ -324,6 +340,22 @@ dialog h3{margin:0;font-family:var(--f-display);font-size:1.2rem}
       </div>
     </div>
     <p class="note">Monte o seu fundo: cada linha é um grau da escala do tom (1 = tônica, 8 = oitava) e a última é o baixo. A sequência segue o tom, o andamento e passa pelo delay. Com uma música do set list selecionada, o padrão fica salvo nela.</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <h2>Acordes da música</h2>
+      <button class="chip" id="progOn" aria-pressed="false">Desligado</button>
+    </div>
+    <div class="seq" id="progBox">
+      <div class="prog-list" id="progList"></div>
+      <div class="tools" id="progPal"></div>
+      <div class="prog-foot">
+        <div class="tools"><span class="lbl">Trocar a cada</span><div class="seg" role="group" aria-label="Compassos por acorde" id="progBars"></div></div>
+        <div class="tools" id="progPresets"></div>
+      </div>
+    </div>
+    <p class="note">O pad, o shimmer, os toques, a sequência e o baixo acompanham o acorde da vez. Toque num acorde da progressão para pular direto para ele. No modo Manual a troca é só por toque, pelas setas <kbd>↑</kbd> <kbd>↓</kbd> ou por um botão/pedal MIDI. Com o “Acorde do pad” em Maior ou Menor, cada acorde ganha a terça certa (o vi fica menor, por exemplo); em 1 · 5 · 8 ele fica neutro. Os graus seguem a escala escolhida na sequência (Maior/Menor).</p>
   </section>
 
   <div class="row2">
@@ -516,14 +548,33 @@ function normSeq(q){
 }
 
 const DEF = {key:null, timbre:'sonho', chord:'n', oct:0, sub:false, vol:80, bright:62, rev:50, fade:30, order:'chrom',
-             arp:55, fill:45, plucks:30, bpm:72, vari:50, seq:SEQ_DEF, songId:null};
+             arp:55, fill:45, plucks:30, bpm:72, vari:50, seq:SEQ_DEF, prog:null, songId:null};
+
+// Acordes da música: graus por modo — [nome, semitons acima da tônica, qualidade]
+const PROG_PAL = {
+  maj: [['I',0,'maj'], ['ii',2,'min'], ['iii',4,'min'], ['IV',5,'maj'], ['V',7,'maj'], ['vi',9,'min'], ['bVII',10,'maj']],
+  min: [['i',0,'min'], ['III',3,'maj'], ['iv',5,'min'], ['v',7,'min'], ['V',7,'maj'], ['VI',8,'maj'], ['VII',10,'maj']]
+};
+const PROG_PRESETS = {
+  maj: [['I','V','vi','IV'], ['I','IV'], ['vi','IV','I','V'], ['I','vi','IV','V'], ['IV','V','vi']],
+  min: [['i','VI','III','VII'], ['i','iv'], ['i','VII','VI','VII'], ['i','iv','v','i'], ['VI','VII','i']]
+};
+const PROG_BARS = [[1,'1 compasso'], [2,'2'], [4,'4'], [0,'Manual']];
+function normProg(p){
+  p = {on:false, bars:2, chords:[], ...(p || {})};
+  p.on = !!p.on;
+  if (!PROG_BARS.some(b => b[0] === p.bars)) p.bars = 2;
+  p.chords = (Array.isArray(p.chords) ? p.chords : []).filter(c => typeof c === 'string').slice(0, 16);
+  return p;
+}
 const clone = o => JSON.parse(JSON.stringify(o));
 let S = clone(DEF);
 try { const saved = JSON.parse(localStorage.getItem('pads-louvor') || '{}'); Object.assign(S, saved, {key:null}); } catch(e) {}
 S.seq = normSeq(S.seq);
+S.prog = normProg(S.prog);
 
 // Set list: cada música guarda o tom e um retrato dos ajustes de som
-const SONG_FIELDS = ['timbre', 'chord', 'oct', 'sub', 'bpm', 'arp', 'fill', 'plucks', 'vari', 'seq'];
+const SONG_FIELDS = ['timbre', 'chord', 'oct', 'sub', 'bpm', 'arp', 'fill', 'plucks', 'vari', 'seq', 'prog'];
 let SET = [];
 try { SET = JSON.parse(localStorage.getItem('pads-louvor-set') || '[]'); if (!Array.isArray(SET)) SET = []; } catch(e) {}
 const curSong = () => SET.find(s => s.id === S.songId) || null;
@@ -639,10 +690,11 @@ function applyMix(instant){
 const fillLevel = () => Math.pow(S.fill / 100, 1.3);
 
 class Voice {
-  constructor(key){
+  constructor(key, at){
     const T = TIMBRES.find(x => x.id === S.timbre);
-    const chord = CHORDS.find(c => c.id === S.chord);
-    const now = ctx.currentTime;
+    const pc = curChord();
+    const chord = CHORDS.find(c => c.id === effChord(pc));
+    const now = Math.max(at || 0, ctx.currentTime);
     this.oscs = []; this.nodes = [];
     const N = (n) => { this.nodes.push(n); return n; };
 
@@ -687,7 +739,7 @@ class Voice {
       });
     }
 
-    const base = 48 + key + (S.oct * 12);
+    const base = 48 + key + (S.oct * 12) + chordOff(pc);
     const notes = chord.iv.map(i => base + i);
     const noteGain = T.level / Math.sqrt(notes.length);
     const canPan = !!ctx.createStereoPanner;
@@ -760,15 +812,15 @@ class Voice {
     lfo(.035, 2200, abp.frequency);
     air.connect(abp); abp.connect(ag); ag.connect(this.fill); air.start(now); this.oscs.push(air);
   }
-  fadeIn(sec){
-    const t = ctx.currentTime;
+  fadeIn(sec, at){
+    const t = Math.max(at || 0, ctx.currentTime);
     for (const g of [this.out.gain, this.wetOut.gain]){ g.setValueAtTime(0, t); g.linearRampToValueAtTime(1, t + Math.max(.02, sec)); }
   }
-  fadeOut(sec){
-    const t = ctx.currentTime, end = t + Math.max(.02, sec);
+  fadeOut(sec, at){
+    const t = Math.max(at || 0, ctx.currentTime), end = t + Math.max(.02, sec);
     for (const g of [this.out.gain, this.wetOut.gain]){ holdParam(g, t); g.linearRampToValueAtTime(0, end); }
     this.oscs.forEach(o => { try { o.stop(end + .05); } catch(e) {} });
-    setTimeout(() => this.nodes.forEach(n => { try { n.disconnect(); } catch(e) {} }), (sec + .4) * 1000);
+    setTimeout(() => this.nodes.forEach(n => { try { n.disconnect(); } catch(e) {} }), (end - ctx.currentTime + .4) * 1000);
   }
 }
 
@@ -806,7 +858,7 @@ function tick(){
     ticks++;
     nextTime += stepDur();
     step = (step + 1) % 16;
-    if (step === 0){ bar++; newBar(); }
+    if (step === 0){ bar++; newBar(); onBar(nextTime); }
   }
 }
 function playStep(s, t){
@@ -816,13 +868,14 @@ function playStep(s, t){
     const div = S.seq.res === 8 ? 2 : 1;
     if (ticks % div === 0){ const ss = (ticks / div) % 16; seqMarks.push([t, ss]); playSeq(ss, t, div); }
   }
-  const base = 48 + S.key + S.oct * 12;
+  const pc = curChord(), cid = effChord(pc);
+  const base = 48 + S.key + S.oct * 12 + chordOff(pc);
   const v = S.vari / 100;
   // Respiração lenta da intensidade ao longo de 8 compassos
   const swell = .7 + .3 * Math.sin((bar * 16 + s) / 128 * Math.PI * 2);
 
   if (S.arp > 0 && pattern[s]){
-    const set = ARP_SET[S.chord];
+    const set = ARP_SET[cid];
     const r = Math.random();
     if (r < v * .15) arpIdx = Math.floor(Math.random() * set.length);
     else arpIdx += pick([1, 1, -1, 2, -1, 1]);
@@ -834,7 +887,7 @@ function playStep(s, t){
   if (S.plucks > 0 && s % 2 === 0){
     const chance = .04 + (S.plucks / 100) * .14 + (s === 0 ? .1 : 0);
     if (Math.random() < chance){
-      const set = PLUCK_SET[S.chord];
+      const set = PLUCK_SET[cid];
       const n = pick(set);
       pluckNote(t, mtof(base + 12 + n), .6 + Math.random() * .4);
       if (Math.random() < .3 + v * .3)   // às vezes responde com uma segunda nota
@@ -844,12 +897,62 @@ function playStep(s, t){
 }
 function playSeq(ss, t, div){
   const mask = S.seq.steps[ss]; if (!mask) return;
-  const sc = SCALES[S.seq.scale];
+  // Com acordes ligados, os graus contam a partir do acorde atual (dentro da escala do tom)
+  const pc = curChord(), off = chordOff(pc), sc = chordScale(pc);
   const acc = ss % (div === 2 ? 2 : 4) === 0 ? 1 : .72;   // acento no tempo
   const dur = stepDur() * div;
   for (let r = 0; r < 8; r++)
-    if (mask & (1 << r)) seqVoice(t, mtof(60 + S.key + S.seq.oct * 12 + sc[r]), acc, dur);
-  if (mask & 256) bassNote(t, mtof(36 + S.key), acc, dur);
+    if (mask & (1 << r)) seqVoice(t, mtof(60 + S.key + off + S.seq.oct * 12 + sc[r]), acc, dur);
+  if (mask & 256) bassNote(t, mtof(36 + S.key + off), acc, dur);
+}
+
+// ---------- Acordes da música (progressão) ----------
+let progIdx = 0, progBar = 0, shownIdx = -1, chordMarks = [], fadingOld = null;
+const progMode = () => S.seq.scale;
+const activeChords = () => S.prog.chords.map(id => PROG_PAL[progMode()].find(c => c[0] === id)).filter(Boolean);
+const progActive = () => S.prog.on && activeChords().length > 0;
+function curChord(){ if (!progActive()) return null; const l = activeChords(); return l[progIdx % l.length]; }
+const chordOff = c => !c ? 0 : c[1] > 7 ? c[1] - 12 : c[1];   // vi e bVII ficam abaixo, perto da tônica
+// Com o pad em Maior/Menor, cada acorde pega a terça certa; 1·5·8, sus e add9 se mantêm
+const effChord = c => c && (S.chord === 'maj' || S.chord === 'min') ? c[2] : S.chord;
+const chordName = c => NOTES[(S.key + c[1]) % 12].l + (c[2] === 'min' ? 'm' : '');
+function chordScale(c){
+  if (!c) return SCALES[S.seq.scale];
+  const sc = SCALES[S.seq.scale].slice(0, 7), i = sc.indexOf(c[1]);
+  if (i < 0) return SCALES[c[2]];
+  return Array.from({length:8}, (_, k) => sc[(i + k) % 7] + 12 * Math.floor((i + k) / 7) - c[1]);
+}
+function swapVoice(sec, at){
+  const v = new Voice(S.key, at);
+  if (voice){ voice.fadeOut(sec, at); fadingOld = {v: voice, at}; }
+  v.fadeIn(sec, at); voice = v;
+}
+// Uma troca agendada que ainda não começou precisa ser desfeita ao parar ou trocar de tom
+function killFading(sec){
+  if (fadingOld && ctx && fadingOld.at > ctx.currentTime) fadingOld.v.fadeOut(Math.min(sec, .5));
+  fadingOld = null;
+}
+function changeChord(i, t){
+  const l = activeChords(), n = l.length;
+  if (!n || S.key === null) return;
+  const j = ((i % n) + n) % n, same = l[j] === l[progIdx % n];
+  progIdx = j;
+  if (!same) swapVoice(Math.min(fadeSec(), 1.2), t);
+  chordMarks.push([t, j]);
+}
+function onBar(t){
+  if (!progActive() || !S.prog.bars) return;
+  progBar++;
+  if (progBar % S.prog.bars === 0) changeChord(progIdx + 1, t);
+}
+function jumpChord(i){
+  if (!progActive() || S.key === null) return;
+  progBar = 0; changeChord(i, ctx.currentTime + .02);
+}
+// Ligar/desligar ou trocar a progressão com o pad tocando: volta ao primeiro acorde
+function applyProgNow(){
+  progIdx = 0; progBar = 0; chordMarks = [];
+  if (S.key !== null){ shownIdx = 0; swapVoice(Math.min(fadeSec(), 1.2), ctx.currentTime + .02); }
 }
 function seqVoice(t, f, vel, dur){
   const snd = S.seq.sound;
@@ -935,9 +1038,11 @@ function pluckNote(t, f, vel, dest = pluckGain){
   setTimeout(() => { try { g.disconnect(); flt.disconnect(); p && p.disconnect(); } catch(e) {} }, (t - ctx.currentTime + 1.8) * 1000);
 }
 
-function start(key, sec){
+function start(key, sec, keepProg){
   initAudio();
   if (ctx.state !== 'running') ctx.resume();
+  if (!keepProg){ progIdx = 0; progBar = 0; chordMarks = []; shownIdx = 0; }
+  killFading(sec);
   const v = new Voice(key);
   if (voice) voice.fadeOut(sec);
   v.fadeIn(sec);
@@ -947,7 +1052,9 @@ function start(key, sec){
   keepAwake(); render();
 }
 function stop(sec){
+  killFading(sec);
   if (voice) voice.fadeOut(sec);
+  chordMarks = []; shownIdx = -1;
   if (ctx){ const t = ctx.currentTime; holdParam(motionOut.gain, t); motionOut.gain.linearRampToValueAtTime(0, t + Math.max(.03, sec)); }
   stopClock();
   voice = null; S.key = null; render();
@@ -955,7 +1062,7 @@ function stop(sec){
 function pressKey(k){
   if (S.key === k) stop(fadeSec()); else start(k, fadeSec());
 }
-function refreshVoice(){ if (S.key !== null) start(S.key, Math.min(fadeSec(), 2.5)); else render(); save(); }
+function refreshVoice(){ if (S.key !== null) start(S.key, Math.min(fadeSec(), 2.5), true); else render(); save(); }
 
 // ---------- Interface ----------
 const $ = id => document.getElementById(id);
@@ -982,7 +1089,7 @@ function render(){
   const T = TIMBRES.find(x => x.id === S.timbre), C = CHORDS.find(c => c.id === S.chord);
   const playing = S.key !== null;
   $('stage').classList.toggle('on', playing);
-  $('nowKey').textContent = playing ? NOTES[S.key].l : '—';
+  $('nowKey').textContent = nowKeyText();
   const song = curSong();
   $('nowLabel').textContent = playing ? (song ? `${song.name} · ${NOTES[S.key].s}` : `Tocando em ${NOTES[S.key].s}`)
                                       : (song ? `Selecionada: ${song.name}` : 'Toque um tom para começar');
@@ -992,7 +1099,70 @@ function render(){
   syncCards();
   renderSet();
   renderSeq();
+  renderProg();
 }
+// Com acordes ligados, o painel mostra o acorde que está soando
+function nowKeyText(){
+  if (S.key === null) return '—';
+  const l = activeChords();
+  return progActive() && shownIdx >= 0 ? chordName(l[shownIdx % l.length]) : NOTES[S.key].l;
+}
+function showChord(){
+  $('nowKey').textContent = nowKeyText();
+  document.querySelectorAll('#progList [data-go]').forEach(b => b.parentNode.classList.toggle('cur', S.key !== null && +b.dataset.go === shownIdx));
+}
+
+// ---------- Acordes da música (interface) ----------
+function renderProg(){
+  const p = S.prog, pal = PROG_PAL[progMode()];
+  const song = curSong(), k = S.key !== null ? S.key : (song ? song.key : 0);
+  const nm = c => NOTES[(k + c[1]) % 12].l + (c[2] === 'min' ? 'm' : '');
+  let vi = 0;
+  const chips = p.chords.map((id, oi) => {
+    const c = pal.find(x => x[0] === id); if (!c) return '';
+    const i = vi++;
+    return `<div class="pchord${S.key !== null && progActive() && i === shownIdx ? ' cur' : ''}">
+      <button class="go" data-go="${i}" aria-label="Ir para ${c[0]}"><b>${nm(c)}</b><small>${c[0]}</small></button>
+      <button class="x" data-del="${oi}" aria-label="Remover ${c[0]}">×</button></div>`;
+  }).join('');
+  $('progList').innerHTML = chips || '<span class="prog-empty">Nenhum acorde. Adicione abaixo ou escolha uma progressão pronta.</span>';
+  $('progPal').innerHTML = pal.map(c => `<button class="btn" data-add="${c[0]}">+ ${c[0]}<small>${nm(c)}</small></button>`).join('');
+  $('progBars').innerHTML = PROG_BARS.map(([v, n]) => `<button data-v="${v}" aria-pressed="${p.bars === v}">${n}</button>`).join('');
+  $('progPresets').innerHTML = '<span>Prontas:</span>' + PROG_PRESETS[progMode()].map((pr, i) => `<button class="btn" data-pr="${i}">${pr.join('–')}</button>`).join('');
+  $('progBox').classList.toggle('on', p.on);
+  $('progOn').setAttribute('aria-pressed', p.on);
+  $('progOn').textContent = p.on ? 'Ligado' : 'Desligado';
+}
+$('progOn').onclick = () => {
+  S.prog.on = !S.prog.on;
+  if (S.prog.on && !activeChords().length) S.prog.chords = PROG_PRESETS[progMode()][0].slice();
+  applyProgNow(); save(); render();
+};
+$('progBox').addEventListener('click', e => {
+  const go = e.target.closest('[data-go]');
+  if (go){ const i = +go.dataset.go; if (S.key !== null && progActive()) jumpChord(i); return; }
+  const del = e.target.closest('[data-del]');
+  if (del){
+    const wasActive = progActive();
+    S.prog.chords.splice(+del.dataset.del, 1);
+    const n = activeChords().length;
+    if (n) progIdx %= n;
+    if (wasActive && !n) applyProgNow();
+    save(); render(); return;
+  }
+  const add = e.target.closest('[data-add]');
+  if (add){
+    if (S.prog.chords.length >= 16) return;
+    const wasActive = progActive();
+    S.prog.chords.push(add.dataset.add);
+    if (!wasActive){ S.prog.on = true; applyProgNow(); }
+    save(); render(); return;
+  }
+  const pr = e.target.closest('[data-pr]');
+  if (pr){ S.prog.chords = PROG_PRESETS[progMode()][+pr.dataset.pr].slice(); S.prog.on = true; applyProgNow(); save(); render(); return; }
+  const b = e.target.closest('#progBars [data-v]');
+  if (b){ S.prog.bars = +b.dataset.v; progBar = 0; save(); renderProg(); }
+});
 
 // ---------- Set list ----------
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[c]));
@@ -1007,7 +1177,7 @@ function renderSet(){
       <div class="song${i === i0 ? ' active' : ''}${i === i0 + 1 ? ' next' : ''}">
         <button class="song-main" data-play="${s.id}">
           <span class="n">${i + 1}</span>
-          <span class="nm"><span>${esc(s.name)}</span><small>${s.bpm} BPM · ${esc(timbreName(s.timbre))}${s.seq && s.seq.on ? ' · sequência' : ''}</small></span>
+          <span class="nm"><span>${esc(s.name)}</span><small>${s.bpm} BPM · ${esc(timbreName(s.timbre))}${s.seq && s.seq.on ? ' · sequência' : ''}${s.prog && s.prog.on && s.prog.chords.length ? ' · ' + esc(s.prog.chords.join('–')) : ''}</small></span>
           <span class="tk">${keyLabel(s)}</span>
         </button>
         <button class="song-edit" data-edit="${s.id}" aria-label="Editar ${esc(s.name)}">Editar</button>
@@ -1028,6 +1198,7 @@ function sanitize(s){
   s.sub = !!s.sub;
   for (const f of ['arp', 'fill', 'plucks', 'vari']) if (typeof s[f] !== 'number') s[f] = S[f];
   s.seq = normSeq(s.seq);
+  s.prog = normProg(s.prog);
   return s;
 }
 // Ajusta escala da sequência e acorde ao modo (maior/menor) da música
@@ -1219,8 +1390,11 @@ $('seqGrid').addEventListener('click', e => {
 $('seqBox').addEventListener('click', e => {
   const b = e.target.closest('.seg[data-f] button'); if (!b) return;
   const f = b.closest('.seg').dataset.f;
-  S.seq[f] = typeof SEQ_OPTS[f][0][0] === 'number' ? +b.dataset.v : b.dataset.v;
-  save(); renderSeq();
+  const v = typeof SEQ_OPTS[f][0][0] === 'number' ? +b.dataset.v : b.dataset.v;
+  if (S.seq[f] === v) return;
+  S.seq[f] = v;
+  if (f === 'scale'){ if (S.prog.on) applyProgNow(); save(); render(); }   // muda os graus dos acordes
+  else { save(); renderSeq(); }
 });
 $('seqPresets').addEventListener('click', e => {
   const b = e.target.closest('[data-p]'); if (!b) return;
@@ -1288,6 +1462,9 @@ document.addEventListener('keydown', e => {
   if ((e.target.matches && e.target.matches('input, textarea, select')) || document.querySelector('dialog[open]') || e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
   if (e.key === 'ArrowRight' || e.key === 'PageDown'){ e.preventDefault(); stepSong(1); return; }
   if (e.key === 'ArrowLeft' || e.key === 'PageUp'){ e.preventDefault(); stepSong(-1); return; }
+  if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && progActive() && S.key !== null){
+    e.preventDefault(); jumpChord(progIdx + (e.key === 'ArrowDown' ? 1 : -1)); return;
+  }
   const k = KEYMAP.indexOf(e.key.toLowerCase());
   if (k >= 0) { pressKey(k); return; }
   if (e.key === ' ') { e.preventDefault(); stop(fadeSec()); return; }
@@ -1323,6 +1500,9 @@ function draw(){
     let c = ph;
     while (seqMarks.length && seqMarks[0][0] <= ctx.currentTime) c = seqMarks.shift()[1];
     setPlayhead(S.seq.on && S.key !== null ? c : -1);
+    let ci = -2;
+    while (chordMarks.length && chordMarks[0][0] <= ctx.currentTime) ci = chordMarks.shift()[1];
+    if (ci > -2){ shownIdx = ci; showChord(); }
   }
   requestAnimationFrame(draw);
 }
@@ -1332,6 +1512,7 @@ const MIDI_ACTIONS = [
   {id:'next', name:'Próxima música'},      {id:'prev', name:'Música anterior'},
   {id:'stop', name:'Parar com fade'},      {id:'cut', name:'Corte imediato'},
   {id:'tnext', name:'Próximo timbre'},     {id:'tprev', name:'Timbre anterior'},
+  {id:'cnext', name:'Próximo acorde'},     {id:'cprev', name:'Acorde anterior'},
   {id:'seq', name:'Liga/desliga sequência'}, {id:'tap', name:'Tap (andamento)'},
   {id:'vol', name:'Volume', cc:true},      {id:'bright', name:'Brilho', cc:true},
   {id:'rev', name:'Reverb', cc:true},      {id:'arp', name:'Shimmer rítmico', cc:true},
@@ -1422,6 +1603,8 @@ function midiTrigger(id){
   else if (id === 'cut') stop(.06);
   else if (id === 'tnext') cycleTimbre(1);
   else if (id === 'tprev') cycleTimbre(-1);
+  else if (id === 'cnext') jumpChord(progIdx + 1);
+  else if (id === 'cprev') jumpChord(progIdx - 1);
   else if (id === 'seq'){ S.seq.on = !S.seq.on; save(); render(); }
   else if (id === 'tap') doTap();
 }
