@@ -175,6 +175,18 @@ input[type=range]{width:100%;accent-color:var(--candle);height:28px}
 .seq-foot{display:grid;grid-template-columns:minmax(0,1fr) minmax(170px,240px);gap:14px;align-items:end}
 .seq-foot .tools > span{font-size:.78rem;color:var(--muted);margin-right:2px}
 
+/* Partes da música (no painel e na aba Acordes) */
+.partbar{grid-column:1 / -1;display:flex;gap:6px;flex-wrap:wrap}
+.pt{flex:1 1 0;min-width:0;background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:9px 8px;font-weight:600;font-size:.92rem;display:flex;flex-direction:column;align-items:center;gap:1px;touch-action:manipulation}
+.pt span{max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pt small{font-weight:400;font-family:var(--f-mono);font-size:.66rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.pt.cur{border-color:var(--candle);background:var(--candle-soft);color:var(--candle)}
+.pt.pend{border-style:dashed;border-color:var(--candle);animation:pend 1s ease-in-out infinite}
+@keyframes pend{50%{background:var(--candle-soft)}}
+.prog-parts{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;justify-content:space-between}
+#progParts{flex-wrap:wrap}
+#progParts button.pend{outline:1px dashed var(--candle)}
+
 /* Acordes da música */
 .prog-list{display:flex;flex-wrap:wrap;gap:8px;min-height:56px;align-items:stretch}
 .prog-empty{color:var(--muted);font-size:.86rem;align-self:center}
@@ -282,6 +294,7 @@ dialog{max-height:calc(100vh - 32px);overflow-y:auto}
       <button class="btn-stop" id="btnStop">Parar com fade</button>
       <button class="btn-cut" id="btnCut">Corte imediato</button>
     </div>
+    <div class="partbar" id="partBar" hidden></div>
     <div class="songnav" id="songNav" hidden>
       <button class="btn" id="btnPrev" aria-label="Música anterior">◀</button>
       <div class="nx" id="nxText"></div>
@@ -383,6 +396,14 @@ dialog{max-height:calc(100vh - 32px);overflow-y:auto}
       <button class="chip" id="progOn" aria-pressed="false">Desligado</button>
     </div>
     <div class="seq" id="progBox">
+      <div class="prog-parts">
+        <div class="seg" role="group" aria-label="Partes da música" id="progParts"></div>
+        <div class="tools">
+          <button class="btn ghost" id="btnPartAdd">+ Parte</button>
+          <button class="btn ghost" id="btnPartRen">Renomear</button>
+          <button class="btn ghost" id="btnPartDel">Excluir parte</button>
+        </div>
+      </div>
       <div class="prog-list" id="progList"></div>
       <div class="tools"><button class="btn" id="btnProgCifra">Detectar de uma cifra…</button></div>
       <div class="tools" id="progPal"></div>
@@ -607,11 +628,20 @@ const PROG_PRESETS = {
   min: [['i','VI','III','VII'], ['i','iv'], ['i','VII','VI','VII'], ['i','iv','v','i'], ['VI','VII','i']]
 };
 const PROG_BARS = [[1,'1 compasso'], [2,'2'], [4,'4'], [0,'Manual']];
+// Cada música pode ter várias partes (Intro, Estrofe, Refrão…), cada uma com sua progressão.
+// `chords` espelha a parte atual; `startPart` é a parte por onde a música começa.
 function normProg(p){
-  p = {on:false, bars:2, chords:[], ...(p || {})};
+  p = {on:false, bars:2, chords:[], parts:null, part:0, startPart:0, ...(p || {})};
   p.on = !!p.on;
   if (!PROG_BARS.some(b => b[0] === p.bars)) p.bars = 2;
-  p.chords = (Array.isArray(p.chords) ? p.chords : []).filter(c => typeof c === 'string').slice(0, 16);
+  const list = a => (Array.isArray(a) ? a : []).filter(c => typeof c === 'string').slice(0, 16);
+  p.chords = list(p.chords);
+  p.parts = (Array.isArray(p.parts) ? p.parts : []).filter(x => x && typeof x.name === 'string').slice(0, 12)
+            .map(x => ({name: x.name.slice(0, 30) || 'Parte', chords: list(x.chords)}));
+  if (!p.parts.length) p.parts = [{name:'Principal', chords: p.chords}];
+  const idx = v => Math.min(p.parts.length - 1, Math.max(0, Math.round(+v) || 0));
+  p.part = idx(p.part); p.startPart = idx(p.startPart);
+  p.chords = p.parts[p.part].chords.slice();
   return p;
 }
 const clone = o => JSON.parse(JSON.stringify(o));
@@ -954,7 +984,7 @@ function playSeq(ss, t, div){
 }
 
 // ---------- Acordes da música (progressão) ----------
-let progIdx = 0, progBar = 0, shownIdx = -1, chordMarks = [], fadingOld = null;
+let progIdx = 0, progBar = 0, shownIdx = -1, chordMarks = [], fadingOld = null, pendingPart = null, shownPart = 0;
 const progMode = () => S.seq.scale;
 const activeChords = () => S.prog.chords.map(id => PROG_PAL[progMode()].find(c => c[0] === id)).filter(Boolean);
 const progActive = () => S.prog.on && activeChords().length > 0;
@@ -988,6 +1018,7 @@ function changeChord(i, t){
   chordMarks.push([t, j]);
 }
 function onBar(t){
+  if (pendingPart !== null){ switchPart(pendingPart, t); return; }
   if (!progActive() || !S.prog.bars) return;
   progBar++;
   if (progBar % S.prog.bars === 0) changeChord(progIdx + 1, t);
@@ -996,6 +1027,29 @@ function jumpChord(i){
   if (!progActive() || S.key === null) return;
   progBar = 0; changeChord(i, ctx.currentTime + .02);
 }
+// Troca de parte: começa a progressão nova do primeiro acorde; `t` = quando soar (pad tocando)
+function switchPart(i, t){
+  const p = S.prog; pendingPart = null;
+  if (!p.parts[i]) return;
+  const old = curChord();
+  p.part = i; p.chords = p.parts[i].chords.slice();
+  progIdx = 0; progBar = 0;
+  if (S.key !== null && t !== undefined){
+    const nw = curChord();
+    if (nw !== old) swapVoice(Math.min(fadeSec(), 1.2), t);
+    chordMarks.push([t, 0, i]);
+  } else { shownPart = i; shownIdx = S.key !== null ? 0 : -1; }
+  save(); render();
+}
+// Toque numa parte: com o pad tocando, entra na próxima virada de compasso; tocar de novo troca na hora
+function requestPart(i){
+  if (!S.prog.parts[i]) return;
+  S.prog.on = true;
+  if (S.key === null){ switchPart(i); return; }
+  if (!S.prog.bars || pendingPart === i){ switchPart(i, ctx.currentTime + .02); return; }
+  pendingPart = i; renderProg();
+}
+const syncPart = () => { S.prog.parts[S.prog.part].chords = S.prog.chords.slice(); };
 // Ligar/desligar ou trocar a progressão com o pad tocando: volta ao primeiro acorde
 function applyProgNow(){
   progIdx = 0; progBar = 0; chordMarks = [];
@@ -1088,7 +1142,7 @@ function pluckNote(t, f, vel, dest = pluckGain){
 function start(key, sec, keepProg){
   initAudio();
   if (ctx.state !== 'running') ctx.resume();
-  if (!keepProg){ progIdx = 0; progBar = 0; chordMarks = []; shownIdx = 0; }
+  if (!keepProg){ progIdx = 0; progBar = 0; chordMarks = []; shownIdx = 0; pendingPart = null; shownPart = S.prog.part; }
   killFading(sec);
   const v = new Voice(key);
   if (voice) voice.fadeOut(sec);
@@ -1101,7 +1155,7 @@ function start(key, sec, keepProg){
 function stop(sec){
   killFading(sec);
   if (voice) voice.fadeOut(sec);
-  chordMarks = []; shownIdx = -1;
+  chordMarks = []; shownIdx = -1; pendingPart = null; shownPart = S.prog.part;
   if (ctx){ const t = ctx.currentTime; holdParam(motionOut.gain, t); motionOut.gain.linearRampToValueAtTime(0, t + Math.max(.03, sec)); }
   stopClock();
   voice = null; S.key = null; render();
@@ -1183,6 +1237,40 @@ function showChord(){
 }
 
 // ---------- Acordes da música (interface) ----------
+function partChordNames(pt){
+  const pal = PROG_PAL[progMode()], song = curSong(), k = S.key !== null ? S.key : (song ? song.key : 0);
+  return pt.chords.map(id => pal.find(x => x[0] === id)).filter(Boolean).map(c => NOTES[(k + c[1]) % 12].l + (c[2] === 'min' ? 'm' : '')).join(' ');
+}
+function renderPartBar(){
+  const p = S.prog, show = p.on && p.parts.length > 1;
+  $('partBar').hidden = !show;
+  if (!show) return;
+  const cur = S.key !== null ? shownPart : p.part;
+  $('partBar').innerHTML = p.parts.map((pt, i) => `<button class="pt${i === cur ? ' cur' : ''}${i === pendingPart ? ' pend' : ''}" data-part-go="${i}" aria-pressed="${i === cur}">
+    <span>${esc(pt.name)}</span><small>${esc(partChordNames(pt)) || '—'}</small></button>`).join('');
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-part-go]'); if (b) requestPart(+b.dataset.partGo);
+});
+$('btnPartAdd').onclick = () => {
+  if (S.prog.parts.length >= 12) return;
+  const name = (prompt('Nome da nova parte:', 'Parte ' + (S.prog.parts.length + 1)) || '').trim();
+  if (!name) return;
+  S.prog.parts.push({name: name.slice(0, 30), chords: []});
+  switchPart(S.prog.parts.length - 1, S.key !== null ? ctx.currentTime + .02 : undefined);
+};
+$('btnPartRen').onclick = () => {
+  const pt = S.prog.parts[S.prog.part];
+  const name = (prompt('Novo nome da parte:', pt.name) || '').trim();
+  if (name){ pt.name = name.slice(0, 30); save(); render(); }
+};
+$('btnPartDel').onclick = () => {
+  const p = S.prog; if (p.parts.length < 2) return;
+  if (!confirm(`Excluir a parte “${p.parts[p.part].name}”?`)) return;
+  p.parts.splice(p.part, 1);
+  if (p.startPart >= p.parts.length) p.startPart = 0;
+  switchPart(Math.min(p.part, p.parts.length - 1), S.key !== null ? ctx.currentTime + .02 : undefined);
+};
 function renderProg(){
   const p = S.prog, pal = PROG_PAL[progMode()];
   const song = curSong(), k = S.key !== null ? S.key : (song ? song.key : 0);
@@ -1199,13 +1287,17 @@ function renderProg(){
   $('progPal').innerHTML = pal.map(c => `<button class="btn" data-add="${c[0]}">+ ${c[0]}<small>${nm(c)}</small></button>`).join('');
   $('progBars').innerHTML = PROG_BARS.map(([v, n]) => `<button data-v="${v}" aria-pressed="${p.bars === v}">${n}</button>`).join('');
   $('progPresets').innerHTML = '<span>Prontas:</span>' + PROG_PRESETS[progMode()].map((pr, i) => `<button class="btn" data-pr="${i}">${pr.join('–')}</button>`).join('');
+  const curP = S.key !== null ? shownPart : p.part;
+  $('progParts').innerHTML = p.parts.map((pt, i) => `<button data-part-go="${i}" aria-pressed="${i === curP}" class="${i === pendingPart ? 'pend' : ''}">${esc(pt.name)}</button>`).join('');
+  $('btnPartDel').hidden = p.parts.length < 2;
+  renderPartBar();
   $('progBox').classList.toggle('on', p.on);
   $('progOn').setAttribute('aria-pressed', p.on);
   $('progOn').textContent = p.on ? 'Ligado' : 'Desligado';
 }
 $('progOn').onclick = () => {
   S.prog.on = !S.prog.on;
-  if (S.prog.on && !activeChords().length) S.prog.chords = PROG_PRESETS[progMode()][0].slice();
+  if (S.prog.on && !activeChords().length){ S.prog.chords = PROG_PRESETS[progMode()][0].slice(); syncPart(); }
   applyProgNow(); save(); render();
 };
 $('progBox').addEventListener('click', e => {
@@ -1214,7 +1306,7 @@ $('progBox').addEventListener('click', e => {
   const del = e.target.closest('[data-del]');
   if (del){
     const wasActive = progActive();
-    S.prog.chords.splice(+del.dataset.del, 1);
+    S.prog.chords.splice(+del.dataset.del, 1); syncPart();
     const n = activeChords().length;
     if (n) progIdx %= n;
     if (wasActive && !n) applyProgNow();
@@ -1224,12 +1316,12 @@ $('progBox').addEventListener('click', e => {
   if (add){
     if (S.prog.chords.length >= 16) return;
     const wasActive = progActive();
-    S.prog.chords.push(add.dataset.add);
+    S.prog.chords.push(add.dataset.add); syncPart();
     if (!wasActive){ S.prog.on = true; applyProgNow(); }
     save(); render(); return;
   }
   const pr = e.target.closest('[data-pr]');
-  if (pr){ S.prog.chords = PROG_PRESETS[progMode()][+pr.dataset.pr].slice(); S.prog.on = true; applyProgNow(); save(); render(); return; }
+  if (pr){ S.prog.chords = PROG_PRESETS[progMode()][+pr.dataset.pr].slice(); syncPart(); S.prog.on = true; applyProgNow(); save(); render(); return; }
   const b = e.target.closest('#progBars [data-v]');
   if (b){ S.prog.bars = +b.dataset.v; progBar = 0; save(); renderProg(); }
 });
@@ -1247,7 +1339,7 @@ function renderSet(){
       <div class="song${i === i0 ? ' active' : ''}${i === i0 + 1 ? ' next' : ''}">
         <button class="song-main" data-play="${s.id}">
           <span class="n">${i + 1}</span>
-          <span class="nm"><span>${esc(s.name)}</span><small>${s.bpm} BPM · ${esc(timbreName(s.timbre))}${s.seq && s.seq.on ? ' · sequência' : ''}${s.prog && s.prog.on && s.prog.chords.length ? ' · ' + esc(s.prog.chords.join('–')) : ''}</small></span>
+          <span class="nm"><span>${esc(s.name)}</span><small>${s.bpm} BPM · ${esc(timbreName(s.timbre))}${s.seq && s.seq.on ? ' · sequência' : ''}${s.prog && s.prog.on && s.prog.chords.length ? ' · ' + (s.prog.parts && s.prog.parts.length > 1 ? s.prog.parts.length + ' partes' : esc(s.prog.chords.join('–'))) : ''}</small></span>
           <span class="tk">${keyLabel(s)}</span>
         </button>
         <button class="song-edit" data-edit="${s.id}" aria-label="Editar ${esc(s.name)}">Editar</button>
@@ -1289,6 +1381,7 @@ function playSong(id, force){
   sanitize(song);
   S.songId = id;
   for (const f of SONG_FIELDS) S[f] = clone(song[f]);
+  S.prog.part = S.prog.startPart; S.prog.chords = S.prog.parts[S.prog.part].chords.slice();
   applyMix(false);
   start(song.key, fadeSec());
   save();
@@ -1335,8 +1428,8 @@ function openSong(id, withCifra){
   (withCifra && s ? $('fCifra') : $('fName')).focus();
 }
 // Com a cifra analisada, a música recebe a progressão escolhida e o pad passa a ter terça
-function applyDetected(s, chords){
-  s.prog = normProg({on:true, bars: s.prog ? s.prog.bars : 2, chords});
+function applyDetected(s, det){
+  s.prog = normProg({on:true, bars: s.prog ? s.prog.bars : 2, parts: det.parts, part: det.start, startPart: det.start});
   if (s.chord === 'n') s.chord = s.mode === 'min' ? 'min' : 'maj';
 }
 $('songForm').addEventListener('submit', e => {
@@ -1467,9 +1560,15 @@ function bestPart(parts){
   return i;
 }
 function cifraChords(){
-  if (!cifra || !cifra.parts[cifraPart]) return null;
-  const pr = partProg(cifra.parts[cifraPart], +$('fKey').value, $('fMode').value);
-  return pr.chords.length ? pr.chords : null;
+  if (!cifra) return null;
+  const k = +$('fKey').value, mode = $('fMode').value, parts = [];
+  let start = 0;
+  cifra.parts.forEach((p, i) => {
+    const pr = partProg(p, k, mode); if (!pr.chords.length) return;
+    if (i === cifraPart) start = parts.length;
+    parts.push({name: p.name, chords: pr.chords});
+  });
+  return parts.length ? {parts: parts.slice(0, 12), start: Math.min(start, 11)} : null;
 }
 function renderCifra(){
   const box = $('cifraResult');
@@ -1487,10 +1586,10 @@ function renderCifra(){
   const kn = NOTES[cifra.key.pc].l + (cifra.key.mode === 'min' ? 'm' : '');
   box.innerHTML = `<div class="cres">
     <p>Tom detectado: <b>${kn}</b> (${NOTES[cifra.key.pc].s} ${cifra.key.mode === 'min' ? 'menor' : 'maior'}) · ${cifra.key.from === 'tom' ? 'pela linha “Tom” da cifra' : 'pelos acordes'}</p>
-    <p>Escolha a parte que o pad vai seguir:</p>
+    <p>Partes encontradas (todas vão para a música; escolha por onde ela começa):</p>
     <div class="parts">${rows}</div>
     ${ignored.size ? `<p class="hint">Acordes fora do tom, ignorados: ${esc([...ignored].join(', '))}</p>` : ''}
-    <p class="hint">Ao salvar, a música recebe o tom e a progressão, e o pad passa para Maior/Menor para os acordes terem terça.</p>
+    <p class="hint">Ao salvar, a música recebe o tom e as partes, e o pad passa para Maior/Menor para os acordes terem terça. Ao vivo, troque de parte pelos botões do painel.</p>
   </div>`;
 }
 function onCifraInput(){
@@ -1734,8 +1833,12 @@ function draw(){
     while (seqMarks.length && seqMarks[0][0] <= ctx.currentTime) c = seqMarks.shift()[1];
     setPlayhead(S.seq.on && S.key !== null ? c : -1);
     let ci = -2;
-    while (chordMarks.length && chordMarks[0][0] <= ctx.currentTime) ci = chordMarks.shift()[1];
-    if (ci > -2){ shownIdx = ci; showChord(); }
+    while (chordMarks.length && chordMarks[0][0] <= ctx.currentTime) ci = chordMarks.shift();
+    if (ci !== -2){
+      shownIdx = ci[1];
+      if (ci[2] !== undefined){ shownPart = ci[2]; renderProg(); }
+      showChord();
+    }
   }
   requestAnimationFrame(draw);
 }
@@ -1746,6 +1849,7 @@ const MIDI_ACTIONS = [
   {id:'stop', name:'Parar com fade'},      {id:'cut', name:'Corte imediato'},
   {id:'tnext', name:'Próximo timbre'},     {id:'tprev', name:'Timbre anterior'},
   {id:'cnext', name:'Próximo acorde'},     {id:'cprev', name:'Acorde anterior'},
+  {id:'pnext', name:'Próxima parte'},      {id:'pprev', name:'Parte anterior'},
   {id:'seq', name:'Liga/desliga sequência'}, {id:'tap', name:'Tap (andamento)'},
   {id:'vol', name:'Volume', cc:true},      {id:'bright', name:'Brilho', cc:true},
   {id:'rev', name:'Reverb', cc:true},      {id:'arp', name:'Shimmer rítmico', cc:true},
@@ -1837,6 +1941,10 @@ function midiTrigger(id){
   else if (id === 'tnext') cycleTimbre(1);
   else if (id === 'tprev') cycleTimbre(-1);
   else if (id === 'cnext') jumpChord(progIdx + 1);
+  else if (id === 'pnext' || id === 'pprev'){
+    const n = S.prog.parts.length, base = pendingPart !== null ? pendingPart : (S.key !== null ? shownPart : S.prog.part);
+    requestPart((base + (id === 'pnext' ? 1 : -1) + n) % n);
+  }
   else if (id === 'cprev') jumpChord(progIdx - 1);
   else if (id === 'seq'){ S.seq.on = !S.seq.on; save(); render(); }
   else if (id === 'tap') doTap();
