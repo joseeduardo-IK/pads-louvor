@@ -1,5 +1,5 @@
 // Guarda o app no aparelho para funcionar sem internet
-const CACHE = 'pads-louvor-v4';
+const CACHE = 'pads-louvor-v5';
 const FILES = ['./', 'index.html', 'manifest.webmanifest', 'icon.svg'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)));

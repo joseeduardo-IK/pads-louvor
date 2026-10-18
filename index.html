@@ -113,6 +113,16 @@ input[type=range]{width:100%;accent-color:var(--candle);height:28px}
 .beat{width:9px;height:9px;border-radius:50%;background:var(--line);display:inline-block;margin-left:8px;vertical-align:middle;transition:background .06s}
 .beat.hit{background:var(--candle);box-shadow:0 0 10px var(--candle)}
 
+/* Abas: o painel fica sempre visível; a barra de abas gruda no topo ao rolar */
+.tabs{position:sticky;top:0;z-index:5;display:flex;gap:4px;background:var(--bg);padding:8px 0;margin:-8px 0 -6px;overflow-x:auto;scrollbar-width:none;border-bottom:1px solid var(--line)}
+.tabs::-webkit-scrollbar{display:none}
+.tabs button{flex:1 1 auto;background:none;border:0;border-radius:10px;padding:10px 12px;font-size:.92rem;font-weight:600;color:var(--muted);white-space:nowrap;position:relative}
+.tabs button:hover{color:var(--fg);background:var(--surface)}
+.tabs button[aria-selected="true"]{color:var(--candle);background:var(--candle-soft)}
+.tabs i{display:none;width:6px;height:6px;border-radius:50%;background:var(--candle);margin-left:5px;vertical-align:super}
+.tabs i.on{display:inline-block}
+@media (max-width:420px){ .tabs{gap:2px} .tabs button{padding:9px 6px;font-size:.8rem} .tabs i{margin-left:3px} }
+
 /* Botões genéricos */
 .btn{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:7px 12px;font-size:.82rem;white-space:nowrap}
 .btn:hover{border-color:#43486e}
@@ -210,6 +220,23 @@ dialog::backdrop{background:rgba(5,6,14,.72)}
 dialog h3{margin:0;font-family:var(--f-display);font-size:1.2rem}
 .form{display:flex;flex-direction:column;gap:14px}
 .frow{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:10px}
+dialog{max-height:calc(100vh - 32px);overflow-y:auto}
+.cifra{border:1px solid var(--line);border-radius:12px;padding:0 12px}
+.cifra summary{cursor:pointer;padding:11px 0;font-size:.88rem;font-weight:600;color:var(--candle)}
+.cifra[open]{padding-bottom:12px}
+.cifra .form{gap:10px}
+.cifra textarea{font:inherit;font-family:var(--f-mono);font-size:.8rem;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:9px 10px;width:100%;resize:vertical}
+.cifra textarea:focus-visible{outline:2px solid var(--candle);outline-offset:1px}
+.cres{display:flex;flex-direction:column;gap:8px;font-size:.84rem}
+.cres p{margin:0}
+.cres .bad{color:var(--danger)}
+.parts{display:flex;flex-direction:column;gap:6px}
+.part{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:8px 12px;text-align:left;display:grid;grid-template-columns:minmax(0,7em) minmax(0,1fr);gap:2px 12px;align-items:baseline}
+.part span{color:var(--muted);font-size:.8rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.part b{font-family:var(--f-display);font-size:1.02rem}
+.part small{grid-column:2;font-family:var(--f-mono);font-size:.7rem;color:var(--muted)}
+.part[aria-pressed="true"]{border-color:var(--candle);background:var(--candle-soft)}
+.part[aria-pressed="true"] b{color:var(--candle)}
 .dlg-actions{display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap}
 
 @media (max-width:760px){
@@ -262,7 +289,15 @@ dialog h3{margin:0;font-family:var(--f-display);font-size:1.2rem}
     </div>
   </div>
 
-  <section>
+  <nav class="tabs" role="tablist" aria-label="Seções do app" id="tabs">
+    <button role="tab" data-go-tab="tocar">Tocar</button>
+    <button role="tab" data-go-tab="set">Set list</button>
+    <button role="tab" data-go-tab="mov">Movimento<i id="dotMov"></i></button>
+    <button role="tab" data-go-tab="acordes">Acordes<i id="dotProg"></i></button>
+    <button role="tab" data-go-tab="ajustes">Ajustes<i id="dotMidi"></i></button>
+  </nav>
+
+  <section data-tab="set">
     <div class="sec-head">
       <h2>Set list</h2>
       <div class="tools">
@@ -279,7 +314,7 @@ dialog h3{margin:0;font-family:var(--f-display);font-size:1.2rem}
     </div>
   </section>
 
-  <section>
+  <section data-tab="tocar">
     <div class="sec-head">
       <h2>Tom</h2>
       <div class="seg" role="group" aria-label="Ordem dos tons">
@@ -290,12 +325,12 @@ dialog h3{margin:0;font-family:var(--f-display);font-size:1.2rem}
     <div class="keys" id="keys"></div>
   </section>
 
-  <section>
+  <section data-tab="tocar">
     <h2>Timbre</h2>
     <div class="timbres" id="timbres"></div>
   </section>
 
-  <section>
+  <section data-tab="mov">
     <h2>Movimento</h2>
     <div class="motion">
       <div class="mcard" id="cardArp">
@@ -321,7 +356,7 @@ dialog h3{margin:0;font-family:var(--f-display);font-size:1.2rem}
     </div>
   </section>
 
-  <section>
+  <section data-tab="mov">
     <div class="sec-head">
       <h2>Sequência</h2>
       <button class="chip" id="seqOn" aria-pressed="false">Desligada</button>
@@ -342,13 +377,14 @@ dialog h3{margin:0;font-family:var(--f-display);font-size:1.2rem}
     <p class="note">Monte o seu fundo: cada linha é um grau da escala do tom (1 = tônica, 8 = oitava) e a última é o baixo. A sequência segue o tom, o andamento e passa pelo delay. Com uma música do set list selecionada, o padrão fica salvo nela.</p>
   </section>
 
-  <section>
+  <section data-tab="acordes">
     <div class="sec-head">
       <h2>Acordes da música</h2>
       <button class="chip" id="progOn" aria-pressed="false">Desligado</button>
     </div>
     <div class="seq" id="progBox">
       <div class="prog-list" id="progList"></div>
+      <div class="tools"><button class="btn" id="btnProgCifra">Detectar de uma cifra…</button></div>
       <div class="tools" id="progPal"></div>
       <div class="prog-foot">
         <div class="tools"><span class="lbl">Trocar a cada</span><div class="seg" role="group" aria-label="Compassos por acorde" id="progBars"></div></div>
@@ -358,7 +394,7 @@ dialog h3{margin:0;font-family:var(--f-display);font-size:1.2rem}
     <p class="note">O pad, o shimmer, os toques, a sequência e o baixo acompanham o acorde da vez. Toque num acorde da progressão para pular direto para ele. No modo Manual a troca é só por toque, pelas setas <kbd>↑</kbd> <kbd>↓</kbd> ou por um botão/pedal MIDI. Com o “Acorde do pad” em Maior ou Menor, cada acorde ganha a terça certa (o vi fica menor, por exemplo); em 1 · 5 · 8 ele fica neutro. Os graus seguem a escala escolhida na sequência (Maior/Menor).</p>
   </section>
 
-  <div class="row2">
+  <div class="row2" data-tab="tocar">
     <section>
       <h2>Acorde do pad</h2>
       <div class="chips" id="chords"></div>
@@ -369,7 +405,7 @@ dialog h3{margin:0;font-family:var(--f-display);font-size:1.2rem}
     </section>
   </div>
 
-  <section>
+  <section data-tab="ajustes">
     <h2>Mixagem</h2>
     <div class="sliders">
       <div class="sl"><label for="vol">Volume <output id="volOut"></output></label><input type="range" id="vol" min="0" max="100" value="80"></div>
@@ -380,7 +416,7 @@ dialog h3{margin:0;font-family:var(--f-display);font-size:1.2rem}
     <p class="note">O acorde “1 · 5 · 8” (tônica, quinta e oitava) não tem terça, então serve tanto para músicas em tom maior quanto menor. O shimmer e os toques de synth seguem o tom e o acorde escolhidos. Ajuste o andamento pelo BPM da música ou use o botão Tap. Trocar de tom faz um crossfade suave com o tempo de fade escolhido. No celular, tire do modo silencioso e mantenha a tela ligada.</p>
   </section>
 
-  <section>
+  <section data-tab="ajustes">
     <h2>Teclado MIDI</h2>
     <div class="midi">
       <div class="midi-status">
@@ -426,6 +462,17 @@ dialog h3{margin:0;font-family:var(--f-display);font-size:1.2rem}
       <label class="field">Modo<select id="fMode"><option value="maj">Maior</option><option value="min">Menor</option></select></label>
       <label class="field">BPM<input id="fBpm" type="number" min="50" max="160" inputmode="numeric"></label>
     </div>
+    <details class="cifra" id="cifraBox">
+      <summary>Detectar tom e acordes por uma cifra</summary>
+      <div class="form">
+        <div class="tools">
+          <button type="button" class="btn" id="btnCifraSearch">Buscar no Cifra Club ↗</button>
+          <span class="hint">copie a cifra inteira e cole abaixo</span>
+        </div>
+        <textarea id="fCifra" rows="6" placeholder="Cole aqui a cifra, com os acordes em cima da letra" aria-label="Cifra da música"></textarea>
+        <div id="cifraResult"></div>
+      </div>
+    </details>
     <p class="note" id="songNote">A música guarda o timbre, o acorde, o movimento e a sequência que estão na tela agora. Depois, os ajustes feitos com ela selecionada ficam salvos nela.</p>
     <div class="dlg-actions">
       <div class="tools">
@@ -1067,6 +1114,28 @@ function refreshVoice(){ if (S.key !== null) start(S.key, Math.min(fadeSec(), 2.
 // ---------- Interface ----------
 const $ = id => document.getElementById(id);
 
+// Abas (a aba aberta fica lembrada neste aparelho)
+const TABS = ['tocar', 'set', 'mov', 'acordes', 'ajustes'];
+let tab = 'tocar';
+try { const t = localStorage.getItem('pads-louvor-tab'); if (TABS.includes(t)) tab = t; } catch(e) {}
+function showTab(t){
+  tab = t;
+  document.querySelectorAll('[data-tab]').forEach(el => { el.hidden = el.dataset.tab !== t; });
+  document.querySelectorAll('[data-go-tab]').forEach(b => b.setAttribute('aria-selected', b.dataset.goTab === t));
+  try { localStorage.setItem('pads-louvor-tab', t); } catch(e) {}
+}
+$('tabs').addEventListener('click', e => {
+  const b = e.target.closest('[data-go-tab]'); if (!b) return;
+  showTab(b.dataset.goTab);
+  if ($('tabs').getBoundingClientRect().top <= 1) $('tabs').scrollIntoView();   // volta ao começo da aba
+});
+showTab(tab);
+function syncDots(){
+  $('dotMov').classList.toggle('on', S.seq.on);
+  $('dotProg').classList.toggle('on', progActive());
+  $('dotMidi').classList.toggle('on', !!midi);
+}
+
 function render(){
   const order = S.order === 'fifths' ? FIFTHS : [...Array(12).keys()];
   const ns = SET[songIdx() + 1], nextKey = ns && ns.key !== S.key ? ns.key : null;
@@ -1100,6 +1169,7 @@ function render(){
   renderSet();
   renderSeq();
   renderProg();
+  syncDots();
 }
 // Com acordes ligados, o painel mostra o acorde que está soando
 function nowKeyText(){
@@ -1249,7 +1319,7 @@ function parseLine(line){
 
 let editing = null;
 $('fKey').innerHTML = NOTES.map((n, i) => `<option value="${i}">${n.l} — ${n.s}</option>`).join('');
-function openSong(id){
+function openSong(id, withCifra){
   const s = id ? SET.find(x => x.id === id) : null;
   editing = s ? s.id : null;
   $('songTitle').textContent = s ? 'Editar música' : 'Nova música';
@@ -1259,28 +1329,191 @@ function openSong(id){
   $('fMode').value = s ? s.mode : 'maj';
   $('fBpm').value = s ? s.bpm : S.bpm;
   $('fDel').hidden = $('fUp').hidden = $('fDown').hidden = !s;
+  $('fCifra').value = ''; cifra = null; renderCifra();
+  $('cifraBox').open = !!withCifra;
   $('dlgSong').showModal();
-  $('fName').focus();
+  (withCifra && s ? $('fCifra') : $('fName')).focus();
+}
+// Com a cifra analisada, a música recebe a progressão escolhida e o pad passa a ter terça
+function applyDetected(s, chords){
+  s.prog = normProg({on:true, bars: s.prog ? s.prog.bars : 2, chords});
+  if (s.chord === 'n') s.chord = s.mode === 'min' ? 'min' : 'maj';
 }
 $('songForm').addEventListener('submit', e => {
   e.preventDefault();
   const name = $('fName').value.trim(); if (!name) return;
   const key = +$('fKey').value, mode = $('fMode').value;
   const bpm = Math.max(50, Math.min(160, Math.round(+$('fBpm').value) || S.bpm));
+  const det = cifraChords();
   const s = editing && SET.find(x => x.id === editing);
-  if (!s) SET.push(newSong({name, key, mode, bpm}));
+  if (!s){ const ns = newSong({name, key, mode, bpm}); if (det) applyDetected(ns, det); SET.push(ns); }
   else {
     const oldKey = s.key, oldMode = s.mode;
     Object.assign(s, {name, key, mode, bpm});
     if (oldMode !== mode) fitMode(s);
+    if (det) applyDetected(s, det);
     if (s.id === S.songId){
-      S.bpm = bpm; S.chord = s.chord; S.seq = clone(s.seq);
+      S.bpm = bpm; S.chord = s.chord; S.seq = clone(s.seq); S.prog = clone(s.prog);
       applyMix(false);
-      if (S.key !== null && (oldKey !== key || oldMode !== mode)) start(key, Math.min(fadeSec(), 2.5));
+      if (S.key !== null){
+        if (oldKey !== key || oldMode !== mode) start(key, Math.min(fadeSec(), 2.5));
+        else if (det) applyProgNow();
+      }
     }
   }
   saveSet(); save(); $('dlgSong').close(); render();
 });
+
+// ---------- Cifra: detecta tom, partes e progressão ----------
+let cifra = null, cifraPart = 0, cifraT;
+// Acorde: letra, acidente, sufixo (m, 7, 7M, sus4, add9, (9), º…) e baixo opcional
+function parseChordTok(t){
+  t = t.replace(/^\(+/, '').replace(/\)+$/, '');
+  const m = t.match(/^([A-G])([#b]?)([^\/]*)(?:\/([A-G][#b]?|\d+))?$/);
+  if (!m) return null;
+  const ext = m[3];
+  if (ext.replace(/maj|min|dim|aug|sus|add/g, '').replace(/[mM\d()+#b\-º°]/g, '') !== '') return null;
+  const pc = (LETTER[m[1]] + (m[2] === '#' ? 1 : m[2] === 'b' ? -1 : 0) + 12) % 12;
+  const minor = /^(m(?!aj)|min|-|dim|º|°)/.test(ext);
+  return {pc, q: minor ? 'min' : 'maj', name: m[1] + m[2] + (minor ? 'm' : '')};
+}
+function chordLine(line){
+  const toks = line.replace(/\[[^\]]*\]/g, ' ').replace(/[|]/g, ' ').replace(/\b(?:x\s?\d+|\d+\s?x)\b/gi, ' ')
+                   .replace(/[:]/g, ' ').trim().split(/\s+/).filter(Boolean);
+  if (!toks.length) return null;
+  const cs = toks.map(parseChordTok);
+  return cs.every(Boolean) ? cs : null;
+}
+const SECTION_RE = /^\s*(intro(?:dução)?|refr[ãa]o|coro|ponte|verso|estrofe|(?:primeira|segunda|terceira|quarta) parte|parte\s*\d*|pr[ée][\s-]?refr[ãa]o|final|solo|interl[úu]dio|chorus|verse|bridge|outro)(?:\s*\d+|\s*\([^)]*\)|\s*\d+\s*x)*\s*:?\s*$/i;
+function analyzeCifra(text){
+  const lines = text.split(/\r?\n/);
+  const parts = [], seen = {};
+  let cur = null, tom = null, title = '';
+  const sec = name => {
+    const k = name.toLowerCase().trim();
+    if (seen[k]) { cur = {skip:true, chords:[]}; return; }   // repetição de uma parte já vista
+    cur = {name: name.trim(), chords: [], skip: /tab/i.test(name)};
+    seen[k] = cur; parts.push(cur);
+  };
+  for (const raw of lines){
+    const line = raw.replace(/\t/g, '    ');
+    const tm = line.match(/\b[Tt]om\s*:\s*([A-G])([#b]?)(m?)(?![a-z])/);
+    if (tm && !tom) { tom = {pc: (LETTER[tm[1]] + (tm[2] === '#' ? 1 : tm[2] === 'b' ? -1 : 0) + 12) % 12, mode: tm[3] ? 'min' : 'maj'}; continue; }
+    const br = line.match(/^\s*\[([^\]]+)\]/);
+    if (br){
+      sec(br[1]);
+      const rest = line.slice(line.indexOf(']') + 1), cs = rest.trim() && chordLine(rest);
+      if (cs){ cur.chords.push(...cs); if (/intro|final|solo|interl/i.test(br[1])) cur = null; }   // parte de uma linha só
+      continue;
+    }
+    const cs = chordLine(line);
+    if (cs){ if (!cur) sec('Parte sem nome'); cur.chords.push(...cs); continue; }
+    if (SECTION_RE.test(line)){ sec(line.replace(/:\s*$/, '')); continue; }
+    const lm = line.match(/^\s*([^:]{3,30}):\s*(.+)$/);   // "Intro: G D Em C"
+    if (lm && SECTION_RE.test(lm[1]) && chordLine(lm[2])){ sec(lm[1]); cur.chords.push(...chordLine(lm[2])); cur = null; continue; }
+    if (!title && line.trim() && !cur && line.trim().length < 70) title = line.trim();
+  }
+  const all = parts.filter(p => !p.skip).flatMap(p => p.chords);
+  if (!all.length) return null;
+  const key = tom ? {...tom, from:'tom'} : {...detectKey(all), from:'acordes'};
+  return {key, parts: parts.filter(p => !p.skip && p.chords.length), title};
+}
+// Pontua as 24 tonalidades: acordes do campo harmônico somam, os de fora tiram; primeiro e último acorde pesam
+function detectKey(all){
+  let best = null;
+  const first = all[0], last = all[all.length - 1];
+  for (let k = 0; k < 12; k++) for (const mode of ['maj', 'min']){
+    const pal = PROG_PAL[mode]; let sc = 0;
+    for (const c of all){
+      const off = (c.pc - k + 12) % 12, e = pal.find(p => p[1] === off && p[2] === c.q);
+      const weak = e && ((mode === 'maj' && e[0] === 'bVII') || (mode === 'min' && e[0] === 'V'));   // emprestados valem menos
+      sc += e ? (weak ? 1 : 2) : pal.some(p => p[1] === off) ? .3 : -1.2;
+      if (off === 0 && c.q === mode) sc += .6;
+    }
+    if (first.pc === k && first.q === mode) sc += 3;
+    if (last.pc === k && last.q === mode) sc += 4;
+    if (!best || sc > best.sc) best = {pc: k, mode, sc};
+  }
+  return best;
+}
+function romanOf(c, k, mode){
+  const off = (c.pc - k + 12) % 12, pal = PROG_PAL[mode];
+  const e = pal.find(p => p[1] === off && p[2] === c.q) || pal.find(p => p[1] === off);
+  return e ? e[0] : null;
+}
+// Menor ciclo que se repete na parte (G D Em C G D Em C → G D Em C), no máximo 8 acordes
+function loopOf(seq){
+  for (let p = 1; p <= Math.min(8, seq.length); p++)
+    if (seq.length >= 2 * p && seq.every((x, i) => x === seq[i % p])) return seq.slice(0, p);
+  return seq.slice(0, 8);
+}
+function partProg(part, k, mode){
+  const ignored = new Set(), seq = [];
+  for (const c of part.chords){
+    const r = romanOf(c, k, mode);
+    if (!r){ ignored.add(c.name); continue; }
+    if (seq[seq.length - 1] !== r) seq.push(r);
+  }
+  if (seq.length > 1 && seq[0] === seq[seq.length - 1]) seq.pop();   // ciclo fechando na mesma nota
+  return {chords: loopOf(seq), ignored: [...ignored]};
+}
+function bestPart(parts){
+  let i = parts.findIndex(p => /refr|coro|chorus/i.test(p.name));
+  if (i < 0){
+    const main = parts.map((p, j) => [p, j]).filter(([p]) => !/intro|solo|final|outro|interl/i.test(p.name));
+    const pool = main.length ? main : parts.map((p, j) => [p, j]);
+    i = pool.reduce((a, b) => b[0].chords.length > a[0].chords.length ? b : a)[1];
+  }
+  return i;
+}
+function cifraChords(){
+  if (!cifra || !cifra.parts[cifraPart]) return null;
+  const pr = partProg(cifra.parts[cifraPart], +$('fKey').value, $('fMode').value);
+  return pr.chords.length ? pr.chords : null;
+}
+function renderCifra(){
+  const box = $('cifraResult');
+  if (!$('fCifra').value.trim()){ box.innerHTML = ''; return; }
+  if (!cifra){ box.innerHTML = '<div class="cres"><p class="bad">Não encontrei acordes nesse texto. Copie a cifra com as linhas de acordes.</p></div>'; return; }
+  const k = +$('fKey').value, mode = $('fMode').value, pal = PROG_PAL[mode];
+  const nm = id => { const c = pal.find(x => x[0] === id); return NOTES[(k + c[1]) % 12].l + (c[2] === 'min' ? 'm' : ''); };
+  const ignored = new Set();
+  const rows = cifra.parts.map((p, i) => {
+    const pr = partProg(p, k, mode); pr.ignored.forEach(x => ignored.add(x));
+    if (!pr.chords.length) return '';
+    return `<button type="button" class="part" data-part="${i}" aria-pressed="${i === cifraPart}">
+      <span>${esc(p.name)}</span><b>${pr.chords.map(nm).join(' ')}</b><small>${pr.chords.join('–')}</small></button>`;
+  }).join('');
+  const kn = NOTES[cifra.key.pc].l + (cifra.key.mode === 'min' ? 'm' : '');
+  box.innerHTML = `<div class="cres">
+    <p>Tom detectado: <b>${kn}</b> (${NOTES[cifra.key.pc].s} ${cifra.key.mode === 'min' ? 'menor' : 'maior'}) · ${cifra.key.from === 'tom' ? 'pela linha “Tom” da cifra' : 'pelos acordes'}</p>
+    <p>Escolha a parte que o pad vai seguir:</p>
+    <div class="parts">${rows}</div>
+    ${ignored.size ? `<p class="hint">Acordes fora do tom, ignorados: ${esc([...ignored].join(', '))}</p>` : ''}
+    <p class="hint">Ao salvar, a música recebe o tom e a progressão, e o pad passa para Maior/Menor para os acordes terem terça.</p>
+  </div>`;
+}
+function onCifraInput(){
+  cifra = analyzeCifra($('fCifra').value);
+  if (cifra){
+    $('fKey').value = cifra.key.pc; $('fMode').value = cifra.key.mode;
+    cifraPart = bestPart(cifra.parts);
+    if (!$('fName').value.trim() && cifra.title) $('fName').value = cifra.title.slice(0, 80);
+  }
+  renderCifra();
+}
+$('fCifra').addEventListener('input', () => { clearTimeout(cifraT); cifraT = setTimeout(onCifraInput, 250); });
+$('fKey').addEventListener('change', renderCifra);
+$('fMode').addEventListener('change', renderCifra);
+$('cifraResult').addEventListener('click', e => {
+  const b = e.target.closest('[data-part]'); if (!b) return;
+  cifraPart = +b.dataset.part; renderCifra();
+});
+$('btnCifraSearch').onclick = () => {
+  const q = $('fName').value.trim();
+  window.open('https://www.cifraclub.com.br/?q=' + encodeURIComponent(q), '_blank', 'noopener');
+};
+$('btnProgCifra').onclick = () => openSong(S.songId, true);
 $('fCancel').onclick = () => $('dlgSong').close();
 $('fDel').onclick = () => {
   const i = SET.findIndex(x => x.id === editing); if (i < 0) return;
@@ -1546,7 +1779,7 @@ async function midiEnable(){
     M.enabled = true; saveM();
     midi.onstatechange = midiHook; midiHook();
   } catch(e){ midiStatus('O navegador não liberou o MIDI (permissão negada ou página sem HTTPS).', false); }
-  renderMidi();
+  renderMidi(); syncDots();
 }
 function midiHook(){
   const names = [];
