@@ -139,7 +139,9 @@ input[type=range]{width:100%;accent-color:var(--candle);height:28px}
 .dpad[data-g="efeito"]{--c:#b59cff}
 .dpad[data-g="fx"]{--c:#6fd3c4}
 .dpad.user small{color:var(--candle)}
-.dpads.editing .dpad{border-style:dashed}
+.dpad.run{border-color:var(--c);animation:pend 1s ease-in-out infinite}
+#fxpads{display:flex;flex-direction:column;gap:14px}
+.editing .dpad{border-style:dashed}
 .drum-mix{display:grid;grid-template-columns:1fr 1fr;gap:18px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 16px}
 @media (max-width:560px){ .drum-mix{grid-template-columns:1fr} }
 .dpad.hit{background:color-mix(in srgb, var(--c) 22%, var(--surface));border-color:var(--c);transform:scale(.97)}
@@ -474,8 +476,12 @@ dialog{max-height:calc(100vh - 32px);overflow-y:auto}
   </section>
 
   <section data-tab="drums">
-    <h2>Efeitos (FX)</h2>
-    <div class="dpads" id="fxpads"></div>
+    <div class="sec-head">
+      <h2>Efeitos (FX)</h2>
+      <button class="btn" id="btnStopFx">Parar FX</button>
+    </div>
+    <div id="fxpads"></div>
+    <p class="note">Os crescendos terminam no 1 do compasso: com o pad ou um groove tocando, eles começam na hora e se ajustam para chegar exatamente na cabeça do compasso (o pad fica aceso até lá). Sem nada tocando, duram o tempo indicado no andamento atual.</p>
   </section>
 
   <section data-tab="drums">
@@ -532,7 +538,7 @@ dialog{max-height:calc(100vh - 32px);overflow-y:auto}
           <label class="field">Pads no canal 10 (bateria)
             <select id="mDrums">
               <option value="gm">Mapa GM (bateria eletrônica)</option>
-              <option value="seq">Notas 36–59 em ordem: 16 pads + 8 FX (controlador de pads)</option>
+              <option value="seq">Notas 36 em diante, em ordem: 16 pads e depois os FX (controlador de pads)</option>
               <option value="off">Não tocam a bateria</option>
             </select>
           </label>
@@ -841,6 +847,8 @@ function initAudio(){
   const room = ctx.createConvolver(); room.buffer = makeRoomIR(1.1);
   drumRoomIn = ctx.createGain(); drumRoomOut = ctx.createGain();
   drumRoomIn.connect(room); room.connect(drumRoomOut); drumRoomOut.connect(drumBus);
+  drumChain = {bus: drumBus, rev: drumRev, room: drumRoomIn};
+  fxChain = makeFxChain();
   loadUserSamples();
   applyMix(true);
 }
@@ -1264,13 +1272,20 @@ function makeRoomIR(sec){
 function denv(param, t, peak, a, d){
   param.setValueAtTime(0.0001, t); param.linearRampToValueAtTime(peak, t + a); param.exponentialRampToValueAtTime(0.0001, t + a + d);
 }
-function dout(node, {rev = .1, room = .4, pan = 0}, life){
+let curChain = null, drumChain, fxChain;
+function makeFxChain(){
+  const c = {bus: ctx.createGain(), rev: ctx.createGain(), room: ctx.createGain()};
+  c.bus.connect(drumBus); c.rev.connect(drumRev); c.room.connect(drumRoomIn);
+  return c;
+}
+function dout(node, {rev = .1, room = .4, pan = 0}, life, chain){
+  const C = chain || curChain || drumChain;
   let last = node;
   if (pan && ctx.createStereoPanner){ const pn = ctx.createStereoPanner(); pn.pan.value = pan; node.connect(pn); last = pn; }
-  last.connect(drumBus);
+  last.connect(C.bus);
   const sends = [];
-  if (rev){ const g = ctx.createGain(); g.gain.value = rev; last.connect(g); g.connect(drumRev); sends.push(g); }
-  if (room){ const g = ctx.createGain(); g.gain.value = room; last.connect(g); g.connect(drumRoomIn); sends.push(g); }
+  if (rev){ const g = ctx.createGain(); g.gain.value = rev; last.connect(g); g.connect(C.rev); sends.push(g); }
+  if (room){ const g = ctx.createGain(); g.gain.value = room; last.connect(g); g.connect(C.room); sends.push(g); }
   setTimeout(() => { try { node.disconnect(); last.disconnect(); sends.forEach(g => g.disconnect()); } catch(e) {} }, life * 1000 + 800);
 }
 function dnz(t, o){
@@ -1437,40 +1452,126 @@ function revSwell(key){
   }));
 }
 // Toca um som reverso terminando no tempo certo: dura `beats` tempos no andamento atual
-function playRev(p, t, v, beats){
+// Toca um som reverso terminando em `end` (no 1 do compasso quando o relógio está rodando)
+function playRev(p, t, v, end){
+  const chain = curChain;
   p.then(b => {
+    const now = ctx.currentTime, st = Math.max(t, now);
     const src = ctx.createBufferSource(); src.buffer = b;
-    src.playbackRate.value = Math.max(.6, Math.min(1.6, b.duration / (beats * 60 / S.bpm)));
+    src.playbackRate.value = Math.max(.5, Math.min(2, b.duration / Math.max(.3, end - st)));
     const g = ctx.createGain(); g.gain.value = v; src.connect(g);
-    dout(g, {room:.1, rev:.25}, b.duration * 1.7);
-    src.start(Math.max(t, ctx.currentTime));
+    dout(g, {room:.1, rev:.25}, b.duration * 2, chain);
+    src.start(st);
   });
 }
+// Quando o pad ou um groove está tocando, os crescendos começam já e se esticam para acabar no 1:
+// o fim é a primeira cabeça de compasso que esteja a pelo menos 75% da duração nominal.
+function nextBarTime(){ return nextTime + ((16 - step) % 16) * stepDur(); }
+function landTime(t, nominal){
+  if (!timer) return t + nominal;
+  const bar = stepDur() * 16; let end = nextBarTime();
+  while (end - t < nominal * .75) end += bar;
+  return end;
+}
+const BEAT = () => 60 / S.bpm;
+function riser(t, end, v){
+  const len = end - t, k = drumKey();
+  fxNoise(t, 250, 9000, len, .4 * v, {rise:true, q:1.2, rev:.5, room:.15});
+  fxOsc(t, 'sawtooth', mtof(48 + k), mtof(72 + k), len, .04 * v, {rise:true, rev:.6});
+  fxOsc(t, 'sawtooth', mtof(55 + k), mtof(79 + k), len, .025 * v, {rise:true, rev:.6, pan:.3});
+}
+// Acorde do tom crescendo: filtro abrindo e volume subindo, corta seco no 1
+function chordSwell(t, end, v, formants){
+  const len = end - t, k = drumKey();
+  const sum = ctx.createGain(), out = ctx.createGain();
+  out.gain.setValueAtTime(.0001, t); out.gain.exponentialRampToValueAtTime(.22 * v, end); out.gain.linearRampToValueAtTime(.0001, end + .04);
+  if (formants){
+    [[800, 7, 1], [1150, 9, .55], [2900, 11, .3], [380, 3, .35]].forEach(([f, q, gn]) => {
+      const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f; bp.Q.value = q;
+      const g = ctx.createGain(); g.gain.value = gn * 2.2; sum.connect(bp); bp.connect(g); g.connect(out);
+    });
+  } else {
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.Q.value = 1.2;
+    lp.frequency.setValueAtTime(250, t); lp.frequency.exponentialRampToValueAtTime(5000, end);
+    sum.connect(lp); lp.connect(out);
+  }
+  (formants ? [0, 7, 12] : [0, 7, 12, 19]).forEach(iv => [-9, 9].forEach(d => {
+    const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = mtof(48 + k + iv); o.detune.value = d;
+    if (formants){ const l = ctx.createOscillator(), lg = ctx.createGain(); l.frequency.value = 4.5 + Math.random(); lg.gain.value = 9; l.connect(lg); lg.connect(o.detune); l.start(t); l.stop(end + .1); }
+    const g = ctx.createGain(); g.gain.value = .25; o.connect(g); g.connect(sum); o.start(t); o.stop(end + .1);
+  }));
+  dout(out, {rev:formants ? .9 : .5, room:.15}, len + .2);
+}
+// Tambores acelerando: semínimas → colcheias → semicolcheias, crescendo
+function tomRoll(t, end, v){
+  const len = end - t, beat = BEAT(); let x = t, i = 0;
+  while (x < end - .01){
+    const k = (x - t) / len, iv = k < 1 / 3 ? beat : k < 2 / 3 ? beat / 2 : beat / 4;
+    hv = .3 + .7 * k;
+    (i % 3 === 2 ? DRUM.tomM : DRUM.tomL).play(x, (.3 + .7 * k) * v);
+    x += iv; i++;
+  }
+}
+function snareRoll(t, end, v){
+  const step = stepDur() / 2, n = Math.max(8, Math.round((end - t) / step));
+  for (let i = 0; i < n; i++){ const k = i / n; snareHit(t + i * (end - t) / n + (Math.random() - .5) * .004, (.08 + .92 * k * k) * v, true); }
+}
+// Subida infinita (escala de Shepard): oitavas subindo, cada uma aparecendo e sumindo
+function shepard(t, end, v){
+  const len = end - t, k = drumKey(), N = 6, pts = 48, master = ctx.createGain();
+  master.gain.setValueAtTime(.0001, t); master.gain.exponentialRampToValueAtTime(.16 * v, end); master.gain.linearRampToValueAtTime(.0001, end + .05);
+  for (let i = 0; i < N; i++){
+    const o = ctx.createOscillator(), g = ctx.createGain(), f0 = mtof(36 + k) * Math.pow(2, i);
+    o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f0 * 2, end);
+    const curve = new Float32Array(pts);
+    for (let j = 0; j < pts; j++){ const x = i + j / (pts - 1); curve[j] = Math.pow(Math.sin(Math.PI * x / N), 2) + .0001; }
+    g.gain.setValueCurveAtTime(curve, t, len);
+    o.connect(g); g.connect(master); o.start(t); o.stop(end + .1);
+  }
+  dout(master, {rev:.6, room:.15}, len + .2);
+}
 const FX = [
-  {id:'impacto', name:'Impacto', g:'fx', fx:true, play:(t, v) => {
+  // ---- Crescendos (terminam no 1). `land` = duração nominal em tempos
+  {id:'riser', name:'Subida 1 compasso', cat:'build', land:4, play:(t, v, end) => riser(t, end, v)},
+  {id:'riser2', name:'Subida 2 compassos', cat:'build', land:8, play:(t, v, end) => riser(t, end, v)},
+  {id:'riser4', name:'Subida 4 compassos', cat:'build', land:16, play:(t, v, end) => riser(t, end, v)},
+  {id:'build', name:'Build completo', cat:'build', land:8, play:(t, v, end) => {
+    snareRoll(t, end, .9 * v);
+    fxNoise(t, 250, 9000, end - t, .3 * v, {rise:true, rev:.5, room:.15});
+    for (let i = 0; i < 4; i++){ hv = .7 + i * .1; DRUM.tomL.play(end - BEAT() + i * BEAT() / 4, (.7 + i * .1) * v); }
+    FX_BY.impacto.play(end, v); DRUM.crash.play(end, v); DRUM.taiko.play(end, v); }},
+  {id:'padcresc', name:'Crescendo de pad', cat:'build', land:8, play:(t, v, end) => chordSwell(t, end, v, false)},
+  {id:'corocresc', name:'Coral crescendo', cat:'build', land:8, play:(t, v, end) => chordSwell(t, end, v, true)},
+  {id:'tomcresc', name:'Tambores crescendo', cat:'build', land:4, play:(t, v, end) => tomRoll(t, end, v)},
+  {id:'rufolongo', name:'Rufo longo', cat:'build', land:8, play:(t, v, end) => snareRoll(t, end, v)},
+  {id:'shepard', name:'Subida infinita', cat:'build', land:8, play:(t, v, end) => shepard(t, end, v)},
+  {id:'revcrash', name:'Prato reverso', cat:'build', land:4, play:(t, v, end) => playRev(revCrash(), t, v, end)},
+  {id:'revswell', name:'Swell reverso', cat:'build', land:4, play:(t, v, end) => playRev(revSwell(drumKey()), t, v, end)},
+  // ---- Impactos e ambientes
+  {id:'impacto', name:'Impacto', cat:'hit', play:(t, v) => {
     dmodes(t, 38, {gain:1.1 * v, d:2.8, modes:4, bright:.45, drop:.6, mallet:true, room:.6, rev:.9});
     dnz(t, {type:'lowpass', f:2500, f2:200, gain:.4 * v, d:.9, room:.5, rev:.9});
     dnz(t, {f:3000, gain:.12 * v, d:1.8, rev:.8}); }},
-  {id:'revcrash', name:'Prato reverso', g:'fx', fx:true, play:(t, v) => playRev(revCrash(), t, v, 4)},
-  {id:'revswell', name:'Swell reverso', g:'fx', fx:true, play:(t, v) => playRev(revSwell(drumKey()), t, v, 4)},
-  {id:'whoosh', name:'Whoosh', g:'fx', fx:true, play:(t, v) => fxNoise(t, 400, 5000, 1.3, .45 * v, {mid:.5, f3:300, peak:.5, sweep:.8, rev:.6, room:.2})},
-  {id:'riser', name:'Subida', g:'fx', fx:true, play:(t, v) => {
-    const len = 60 / S.bpm * 4, k = drumKey();
-    fxNoise(t, 300, 8000, len, .4 * v, {rise:true, rev:.5, room:.2});
-    fxOsc(t, 'sawtooth', mtof(48 + k), mtof(72 + k), len, .05 * v, {rise:true, rev:.6}); }},
-  {id:'down', name:'Descida', g:'fx', fx:true, play:(t, v) => {
+  {id:'impactoprato', name:'Impacto com prato', cat:'hit', play:(t, v) => { FX_BY.impacto.play(t, v); DRUM.crash.play(t, v); DRUM.taiko.play(t, .9 * v); }},
+  {id:'whoosh', name:'Whoosh', cat:'hit', play:(t, v) => fxNoise(t, 400, 5000, 1.3, .45 * v, {mid:.5, f3:300, peak:.5, sweep:.8, rev:.6, room:.2})},
+  {id:'down', name:'Descida', cat:'hit', play:(t, v) => {
     const k = drumKey();
     fxNoise(t, 6000, 200, 2.2, .35 * v, {peak:.02, rev:.7, room:.2});
     fxOsc(t, 'triangle', mtof(72 + k), mtof(36 + k), 2.2, .12 * v, {rev:.6}); }},
-  {id:'subdrop', name:'Sub drop', g:'fx', fx:true, play:(t, v) => {
+  {id:'subdrop', name:'Sub drop', cat:'hit', play:(t, v) => {
     fxOsc(t, 'sine', 90, 28, 2.2, .9 * v, {rev:.15, room:.1});
     fxOsc(t, 'triangle', 180, 56, 1, .12 * v, {rev:.2}); }},
-  // Brilho: acorde agudo de sinos no tom, com reverb enorme
-  {id:'brilho', name:'Brilho', g:'fx', fx:true, play:(t, v) => {
+  {id:'brilho', name:'Brilho', cat:'hit', play:(t, v) => {
     const k = drumKey();
     [12, 19, 24, 31].forEach((iv, i) => fxOsc(t + i * .025, 'sine', mtof(60 + k + iv), mtof(60 + k + iv), 3.5, .09 * v, {rev:1.2, room:.2, pan:(i - 1.5) * .3}));
-    dnz(t, {f:9000, gain:.06 * v, d:.6, rev:1}); }}
+    dnz(t, {f:9000, gain:.06 * v, d:.6, rev:1}); }},
+  // Coração: "tum-tum" abafado com reverb, para momentos íntimos
+  {id:'coracao', name:'Coração', cat:'hit', play:(t, v) => {
+    [[0, .9], [.27, .65]].forEach(([o, a]) => dmodes(t + o, 52, {gain:a * v, d:.4, modes:2, bright:.25, drop:.15, mallet:true, room:.6, rev:.6})); }},
+  {id:'vento', name:'Vento', cat:'hit', play:(t, v) => fxNoise(t, 400, 1400, 8, .28 * v, {mid:.45, f3:500, peak:.4, q:.8, sweep:.6, rev:.7, room:.2})}
 ];
+FX.forEach(f => { f.g = 'fx'; f.fx = true; });
+const FX_BY = Object.fromEntries(FX.map(f => [f.id, f]));
 DRUMS.push(...FX);
 const DRUM = Object.fromEntries(DRUMS.map(d => [d.id, d]));
 const DRUM_PADS = DRUMS.filter(d => !d.hidden && !d.fx);
@@ -1505,23 +1606,46 @@ function loadUserSamples(){
     renderPadGrids();
   }).catch(() => {});
 }
+// Toca um pad; devolve quando o som "chega" (fim dos crescendos), para a tela acompanhar
 function playDrum(id, t, v){
   hv = v;
-  const b = userBuf[id];
-  if (b){
-    const src = ctx.createBufferSource(); src.buffer = b; src.playbackRate.value = 1 + (Math.random() - .5) * .02;
-    const g = ctx.createGain(); g.gain.value = v; src.connect(g);
-    dout(g, {room:.25, rev:.12}, t - ctx.currentTime + b.duration);
-    src.start(t);
-  } else DRUM[id].play(t, v);
+  const d = DRUM[id], b = userBuf[id];
+  curChain = d.fx ? fxChain : null;
+  try {
+    if (b){
+      const src = ctx.createBufferSource(); src.buffer = b; src.playbackRate.value = 1 + (Math.random() - .5) * .02;
+      const g = ctx.createGain(); g.gain.value = v; src.connect(g);
+      dout(g, {room:.25, rev:.12}, t - ctx.currentTime + b.duration);
+      src.start(t);
+      return t + b.duration;
+    }
+    const end = d.land ? landTime(t, d.land * BEAT()) : t;
+    d.play(t, v, end);
+    return end;
+  } finally { curChain = null; }
 }
 function hitDrum(id, vel = 1, t){
   if (!ctx) initAudio();
   if (ctx.state !== 'running') ctx.resume();
   const d = DRUM[id]; if (!d) return;
-  playDrum(id, t || ctx.currentTime + .005, vel);
+  const st = t || ctx.currentTime + .005, end = playDrum(id, st, vel);
   const el = document.querySelector(`[data-drum="${id}"]`);
-  if (el){ el.classList.add('hit'); clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove('hit'), 110); }
+  if (el){
+    el.classList.add('hit'); clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove('hit'), 110);
+    if (d.land){   // crescendo: o pad fica aceso até chegar no 1
+      el.classList.add('run'); clearTimeout(el._r);
+      el._r = setTimeout(() => el.classList.remove('run'), Math.max(0, end - ctx.currentTime) * 1000);
+    }
+  }
+}
+// Corta todos os efeitos que estiverem soando (inclusive crescendos longos e reverb deles)
+function stopFx(){
+  if (!ctx || !fxChain) return;
+  const old = fxChain, t = ctx.currentTime;
+  [old.bus, old.rev, old.room].forEach(g => { holdParam(g.gain, t); g.gain.linearRampToValueAtTime(0, t + .25); });
+  setTimeout(() => [old.bus, old.rev, old.room].forEach(g => { try { g.disconnect(); } catch(e) {} }), 600);
+  fxChain = makeFxChain();
+  document.querySelectorAll('.dpad.run').forEach(el => el.classList.remove('run'));
 }
 // Grooves: 16 semicolcheias por compasso (ou 12 tercinas com `trip`), `bars` compassos.
 // X = acento, x = forte, o = normal, g = nota fantasma. `then` = groove que entra quando acabar (com prato).
@@ -2253,7 +2377,10 @@ let editSounds = false, samplePad = null;
 function renderPadGrids(){
   const cell = (d, i) => `<button class="dpad${userName[d.id] ? ' user' : ''}" data-drum="${d.id}" data-g="${d.g}"><b>${d.name}</b><small>${userName[d.id] ? '♪ ' + esc(userName[d.id]).slice(0, 18) : i + 1}</small></button>`;
   $('dpads').innerHTML = DRUM_PADS.map(cell).join('');
-  $('fxpads').innerHTML = FX_PADS.map((d, i) => cell(d, i + DRUM_PADS.length)).join('');
+  const n0 = DRUM_PADS.length;
+  $('fxpads').innerHTML = [['build', 'Crescendos (terminam no 1)'], ['hit', 'Impactos e ambientes']].map(([c, title]) =>
+    `<div class="tgroup"><h3>${title}</h3><div class="dpads">` +
+    FX_PADS.map((d, i) => d.cat === c ? cell(d, n0 + i) : '').join('') + '</div></div>').join('');
   ['dpads', 'fxpads'].forEach(id => $(id).classList.toggle('editing', editSounds));
 }
 renderPadGrids();
@@ -2267,6 +2394,7 @@ if (window.indexedDB) Promise.all([idb.keys(), idb.all()]).then(([ks, vs]) => { 
   });
   $(gid).addEventListener('click', e => { const b = e.target.closest('[data-drum]'); if (b && e.detail === 0) (editSounds ? openSample : hitDrum)(b.dataset.drum); });
 });
+$('btnStopFx').onclick = stopFx;
 $('btnMySounds').onclick = () => {
   editSounds = !editSounds;
   $('btnMySounds').textContent = editSounds ? 'Pronto' : 'Usar meus sons';
@@ -2432,7 +2560,7 @@ const MIDI_ACTIONS = [
   {id:'rev', name:'Reverb', cc:true},      {id:'arp', name:'Shimmer rítmico', cc:true},
   {id:'fill', name:'Preenchimento', cc:true}, {id:'plucks', name:'Toques de synth', cc:true},
   {id:'seqVol', name:'Volume da sequência', cc:true},
-  {id:'fill', name:'Virada (bateria)'},    {id:'groove', name:'Liga/desliga groove'},
+  {id:'fill', name:'Virada (bateria)'},    {id:'stopfx', name:'Parar FX'},    {id:'groove', name:'Liga/desliga groove'},
   {id:'drumVol', name:'Volume da bateria', cc:true}, {id:'drumAmb', name:'Ambiência da bateria', cc:true}
 ];
 const MDEF = {enabled:false, ch:0, notes:'switch', pc:'timbre', drums:'gm', map:{vol:{t:'cc', n:7}, bright:{t:'cc', n:1}}};
@@ -2537,6 +2665,7 @@ function midiTrigger(id){
   else if (id === 'seq'){ S.seq.on = !S.seq.on; save(); render(); }
   else if (id === 'tap') doTap();
   else if (id === 'fill') queueFill();
+  else if (id === 'stopfx') stopFx();
   else if (id === 'groove') setGroove(grv || grvNext ? null : lastGrv);
 }
 function midiCont(id, v){
