@@ -79,7 +79,9 @@ h2{font-size:.75rem;text-transform:uppercase;letter-spacing:.14em;color:var(--mu
 .key.next{border-style:dashed;border-color:var(--candle)}
 
 /* Timbres */
-.timbres{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.timbres{display:flex;flex-direction:column;gap:16px}
+.tgroup h3{margin:0 0 8px;font-size:.8rem;font-weight:600;color:var(--muted)}
+.tgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
 .timbre{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;text-align:left;display:flex;flex-direction:column;gap:2px;min-width:0}
 .timbre b{font-weight:600;font-size:.98rem;display:flex;justify-content:space-between;gap:6px}
 .timbre b i{font-style:normal;font-family:var(--f-mono);font-size:.7rem;color:#5d6188;font-weight:500}
@@ -264,7 +266,7 @@ dialog{max-height:calc(100vh - 32px);overflow-y:auto}
 
 @media (max-width:760px){
   .keys{grid-template-columns:repeat(4,minmax(0,1fr))}
-  .timbres{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .tgrid{grid-template-columns:repeat(2,minmax(0,1fr))}
   .row2{grid-template-columns:1fr}
   .sliders{grid-template-columns:1fr 1fr}
   .stage{grid-template-columns:auto 1fr}
@@ -339,7 +341,10 @@ dialog{max-height:calc(100vh - 32px);overflow-y:auto}
   </section>
 
   <section data-tab="tocar">
-    <h2>Timbre</h2>
+    <div class="sec-head">
+      <h2>Timbre</h2>
+      <button class="btn" id="btnPreach">Fundo para pregação</button>
+    </div>
     <div class="timbres" id="timbres"></div>
   </section>
 
@@ -575,7 +580,30 @@ const TIMBRES = [
   {id:'cristal', name:'Cristal', desc:'Sinos suaves e claros', cutoff:8000, q:.3, trem:[.23,.25], vib:[3,4], send:.55, level:.8,
     layers:[{wave:'bell', oct:1, det:[-4,4], gain:.24}, {type:'sine', gain:.18}]},
   {id:'profundo', name:'Profundo', desc:'Escuro, cheio de grave', cutoff:520, q:.8, lfo:[.04,160], level:1.05,
-    layers:[{type:'triangle', det:[-5,5], gain:.3}, {type:'sine', oct:-1, gain:.42, rootOnly:true}]}
+    layers:[{type:'triangle', det:[-5,5], gain:.3}, {type:'sine', oct:-1, gain:.42, rootOnly:true}]},
+  // Profundos: ondas suaves (seno/triângulo), filtro baixo e movimento lento — fundo para falar por cima
+  {id:'calmaria', name:'Calmaria', desc:'Escuro e parado, para falar por cima', cutoff:650, q:.4, lfo:[.03,120], chorus:.4, send:.5, level:1.1,
+    layers:[{type:'sine', det:[-5,5], gain:.42}, {type:'triangle', oct:-1, gain:.3, rootOnly:true}, {type:'triangle', oct:1, gain:.05}]},
+  {id:'manto', name:'Manto', desc:'Quente e macio, sem brilho', cutoff:950, q:.5, lfo:[.05,220], chorus:.6, send:.4, level:1,
+    layers:[{type:'triangle', det:[-8,8], gain:.4}, {type:'sine', oct:-1, gain:.32, rootOnly:true}, {type:'sawtooth', det:[-14,14], gain:.05}]},
+  {id:'oceano', name:'Oceano', desc:'Ondas graves que vão e voltam devagar', cutoff:720, q:.9, lfo:[.03,380], trem:[.07,.3], chorus:.7, send:.55, level:1.05,
+    layers:[{type:'triangle', det:[-10,10], gain:.36}, {type:'sine', oct:-1, gain:.4, rootOnly:true}, {type:'sawtooth', oct:-1, det:[-6,6], gain:.07}]},
+  {id:'veludo', name:'Veludo', desc:'Cordas graves aveludadas', cutoff:1150, q:.4, fenv:[500,3], vib:[4.8,5], lfo:[.08,260], chorus:.5, send:.35, level:.9,
+    layers:[{type:'sawtooth', det:[-12,-4,4,12], gain:.12}, {type:'triangle', oct:-1, gain:.26}]},
+  {id:'coralgrave', name:'Coral Grave', desc:'Vozes graves em “ooh”', cutoff:2000, q:.4, vib:[4.4,8], send:.3, level:1.9,
+    formant:[[400, 6, 1], [780, 8, .35], [2500, 10, .1], [260, 3, .45]],
+    layers:[{type:'sawtooth', oct:-1, det:[-7,7], gain:.35}]},
+  {id:'orgsuave', name:'Órgão Suave', desc:'Flautas macias, sem rotativo', cutoff:2800, q:.3, trem:[4.2,.05], send:.4, level:.85,
+    layers:[{wave:'flute', det:[-3,3], gain:.32}, {wave:'flute', oct:-1, gain:.2, rootOnly:true}]},
+  // Inspirados nos estilos mais usados em pads de louvor (Catedral, Juno, feedback de guitarra)
+  {id:'catedral', name:'Catedral', desc:'Órgão e coro num salão enorme', cutoff:2400, q:.3, vib:[4.5,5], send:.85, level:1.2,
+    formant:[[400, 6, 1], [780, 8, .35], [2500, 10, .1], [260, 3, .45]],
+    layers:[{type:'sawtooth', det:[-6,6], gain:.22}, {wave:'flute', det:[-2,2], gain:.24}, {wave:'flute', oct:-1, gain:.16, rootOnly:true}]},
+  {id:'juno', name:'Juno', desc:'Synth anos 80 com chorus largo', cutoff:1800, q:.8, fenv:[600,2.5], lfo:[.1,350], chorus:1, level:.9,
+    layers:[{type:'sawtooth', det:[-6,6], gain:.17}, {type:'square', oct:-1, gain:.07}]},
+  {id:'guitarra', name:'Guitarra Ambiente', desc:'Swell de guitarra com reverb longo', cutoff:2600, q:.6, fenv:[300,7], vib:[5.5,6], chorus:.5, send:.8,
+    shimmerVerb:{level:.12, swell:9}, level:.9,
+    layers:[{type:'sawtooth', det:[-5,5], gain:.12}, {type:'triangle', gain:.25}, {type:'triangle', oct:1, gain:.12}]}
 ];
 
 // Notas seguras para o shimmer (acima do pad) e para os toques de synth, por tipo de acorde
@@ -593,7 +621,14 @@ const TEMPLATES = [
 ];
 
 // Atmosféricos primeiro
-const ORDER = ['sonho','escuro','evolutivo','analogico','shimmer','atmos','quente','cordas','coral','orgao','cristal','profundo'];
+// Profundos primeiro (as teclas 1–0 seguem esta ordem)
+const TCATS = [
+  ['fundo', 'Profundos · fundo de pregação', ['calmaria','manto','oceano','veludo','coralgrave','catedral','orgsuave','profundo']],
+  ['atmos', 'Atmosféricos', ['sonho','escuro','evolutivo','analogico','guitarra','juno','atmos','shimmer']],
+  ['classico', 'Clássicos', ['quente','cordas','coral','orgao','cristal']]
+];
+const ORDER = TCATS.flatMap(c => c[2]);
+TIMBRES.forEach(t => { t.cat = TCATS.find(c => c[2].includes(t.id))[0]; });
 TIMBRES.sort((a, b) => ORDER.indexOf(a.id) - ORDER.indexOf(b.id));
 
 // Sequência personalizada: 16 passos; cada passo é uma máscara de bits (bits 0–7 = graus 1..8, bit 8 = baixo)
@@ -684,6 +719,7 @@ function initAudio(){
   dry.connect(master); wet.connect(master); master.connect(comp); comp.connect(analyser); analyser.connect(ctx.destination);
   waves.organ = harmonicWave([0, 1, .85, .55, .6, 0, .35, 0, .3, 0, 0, 0, .15]);
   waves.bell  = harmonicWave([0, 1, .05, .5, 0, .28, 0, .14, 0, .07]);
+  waves.flute = harmonicWave([0, 1, .3, .1, .04]);
 
   // Chorus estéreo: dois delays curtos modulados, um para cada lado
   chorusIn = ctx.createGain();
@@ -733,8 +769,8 @@ function makeIR(sec){
     for (let i = pre; i < len; i++){
       const t = (i - pre) / (len - pre);
       const x = (Math.random() * 2 - 1) * Math.pow(1 - t, 3.4);
-      y += (0.22 + 0.5 * (1 - t)) * (x - y);   // escurece a cauda ao longo do tempo
-      d[i] = y;
+      y += (0.1 + 0.36 * (1 - t)) * (x - y);   // escurece a cauda ao longo do tempo
+      d[i] = y * 1.35;
     }
   }
   return buf;
@@ -797,6 +833,8 @@ class Voice {
     if (T.trem){ trem.gain.value = 1 - T.trem[1] / 2; lfo(T.trem[0], T.trem[1] / 2, trem.gain); }
     const vib = T.vib ? lfo(T.vib[0], T.vib[1], ctx.createGain().gain) : null; // destino real ligado abaixo
     if (vib) vib.disconnect();
+    const drift = lfo(.04 + Math.random() * .05, 3.5, ctx.createGain().gain);   // ±3,5 cents, bem lento
+    drift.disconnect();
     if (T.evolve){
       // Um LFO lento acelera e freia outro LFO que move o filtro
       const oB = ctx.createOscillator(), gB = N(ctx.createGain());
@@ -809,7 +847,7 @@ class Voice {
     let entry = filt;
     if (T.formant){
       entry = N(ctx.createGain());
-      [[800, 7, 1], [1150, 9, .55], [2900, 11, .3], [380, 3, .35]].forEach(([f, q, g]) => {
+      (Array.isArray(T.formant) ? T.formant : [[800, 7, 1], [1150, 9, .55], [2900, 11, .3], [380, 3, .35]]).forEach(([f, q, g]) => {
         const bp = N(ctx.createBiquadFilter()); bp.type = 'bandpass'; bp.frequency.value = f; bp.Q.value = q;
         const gg = N(ctx.createGain()); gg.gain.value = g;
         entry.connect(bp); bp.connect(gg); gg.connect(filt);
@@ -831,6 +869,7 @@ class Voice {
           o.frequency.value = mtof(m + (L.oct || 0) * 12 + (L.semi || 0));
           o.detune.value = d + (Math.random() - .5) * 3;
           if (vib) vib.connect(o.detune);
+          drift.connect(o.detune);
           const g = N(ctx.createGain()); g.gain.value = L.gain * noteGain / Math.sqrt(dets.length);
           o.connect(g);
           let dest = (T.formant && L.type === 'sawtooth') ? entry : filt;
@@ -858,9 +897,9 @@ class Voice {
       const sd = N(ctx.createGain()); sd.gain.value = .12; sg.connect(sd); sd.connect(this.out);
       lfo(.09, sv.level * .4, sg.gain);
       [12, 19, 24].forEach(iv => [-6, 6].forEach(d => {
-        const o = ctx.createOscillator(); o.type = 'triangle';
+        const o = ctx.createOscillator(); o.type = 'sine';
         o.frequency.value = mtof(base + iv); o.detune.value = d;
-        const g = N(ctx.createGain()); g.gain.value = iv === 24 ? .22 : .35;
+        const g = N(ctx.createGain()); g.gain.value = iv === 24 ? .1 : .35;
         o.connect(g); g.connect(sg); o.start(now); this.oscs.push(o);
       }));
     }
@@ -869,14 +908,14 @@ class Voice {
     this.fill = N(ctx.createGain()); this.fill.gain.value = fillLevel();
     this.fill.connect(this.out);
     const fRev = N(ctx.createGain()); fRev.gain.value = .9; this.fill.connect(fRev); fRev.connect(this.wetOut);
-    const ff = N(ctx.createBiquadFilter()); ff.type = 'lowpass'; ff.frequency.value = 2200; ff.Q.value = .6;
+    const ff = N(ctx.createBiquadFilter()); ff.type = 'lowpass'; ff.frequency.value = 1300; ff.Q.value = .4;
     ff.connect(this.fill);
-    lfo(.06, 900, ff.frequency);
-    [base + 12, base + 19, base + 24].forEach((m, mi) => {
-      [-22, -8, 8, 22].forEach((d, di) => {
-        const o = ctx.createOscillator(); o.type = 'sawtooth';
+    lfo(.045, 450, ff.frequency);
+    [base + 7, base + 12, base + 19].forEach((m, mi) => {
+      [-14, -5, 5, 14].forEach((d, di) => {
+        const o = ctx.createOscillator(); o.type = 'triangle';
         o.frequency.value = mtof(m); o.detune.value = d + (Math.random() - .5) * 4;
-        const g = N(ctx.createGain()); g.gain.value = (mi === 2 ? .025 : .04);
+        const g = N(ctx.createGain()); g.gain.value = (mi === 2 ? .03 : .06);
         o.connect(g);
         if (canPan){ const p = N(ctx.createStereoPanner()); p.pan.value = (di / 3 * 2 - 1) * .9; g.connect(p); p.connect(ff); }
         else g.connect(ff);
@@ -884,9 +923,13 @@ class Voice {
       });
     });
     const air = ctx.createBufferSource(); air.buffer = noiseBuf; air.loop = true;
-    const abp = N(ctx.createBiquadFilter()); abp.type = 'bandpass'; abp.frequency.value = 3800; abp.Q.value = .9;
-    const ag = N(ctx.createGain()); ag.gain.value = .045;
-    lfo(.035, 2200, abp.frequency);
+    const abp = N(ctx.createBiquadFilter()); abp.type = 'bandpass'; abp.frequency.value = 1800; abp.Q.value = .8;
+    const ag = N(ctx.createGain()); ag.gain.value = .025;
+    lfo(.035, 700, abp.frequency);
+    // Grave do preenchimento: uma oitava abaixo da tônica, dá corpo ao ambiente
+    const fs = ctx.createOscillator(); fs.type = 'sine'; fs.frequency.value = mtof(base - 12);
+    const fsg = N(ctx.createGain()); fsg.gain.value = .1;
+    fs.connect(fsg); fsg.connect(this.fill); fs.start(now); this.oscs.push(fs);
     air.connect(abp); abp.connect(ag); ag.connect(this.fill); air.start(now); this.oscs.push(air);
   }
   fadeIn(sec, at){
@@ -959,7 +1002,7 @@ function playStep(s, t){
     if (arpIdx >= set.length) arpIdx = set.length - 2 - Math.floor(Math.random() * 2);
     if (arpIdx < 0) arpIdx = 1;
     const vel = (s % 4 === 0 ? 1 : .55 + Math.random() * .3) * swell;
-    shimmerNote(t, mtof(base + 24 + set[Math.max(0, arpIdx)]), vel);
+    shimmerNote(t, mtof(base + 12 + set[Math.max(0, arpIdx)]), vel);
   }
   if (S.plucks > 0 && s % 2 === 0){
     const chance = .04 + (S.plucks / 100) * .14 + (s === 0 ? .1 : 0);
@@ -1112,11 +1155,11 @@ function bassNote(t, f, vel, dur){
 function shimmerNote(t, f, vel, dest = arpGain){
   const dec = Math.min(1.6, .35 + 40 / S.bpm);
   const g = ctx.createGain(); g.gain.setValueAtTime(0, t);
-  g.gain.linearRampToValueAtTime(.16 * vel, t + .006);
+  g.gain.linearRampToValueAtTime(.16 * vel, t + .014);
   g.gain.exponentialRampToValueAtTime(.0005, t + dec);
   const p = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
   if (p){ p.pan.value = (Math.random() * 2 - 1) * .6; g.connect(p); p.connect(dest); } else g.connect(dest);
-  [[f, 'sine', 1], [f * 2, 'triangle', .22], [f * 1.003, 'sine', .5]].forEach(([fr, ty, a]) => {
+  [[f, 'sine', 1], [f * 2, 'sine', .07], [f, 'triangle', .3]].forEach(([fr, ty, a]) => {
     const o = ctx.createOscillator(), og = ctx.createGain();
     o.type = ty; o.frequency.value = fr; og.gain.value = a;
     o.connect(og); og.connect(g); o.start(t); o.stop(t + dec + .05);
@@ -1125,8 +1168,8 @@ function shimmerNote(t, f, vel, dest = arpGain){
 }
 function pluckNote(t, f, vel, dest = pluckGain){
   const g = ctx.createGain(), flt = ctx.createBiquadFilter();
-  flt.type = 'lowpass'; flt.Q.value = 5;
-  flt.frequency.setValueAtTime(4500, t); flt.frequency.exponentialRampToValueAtTime(500, t + .35);
+  flt.type = 'lowpass'; flt.Q.value = 1.5;
+  flt.frequency.setValueAtTime(2400, t); flt.frequency.exponentialRampToValueAtTime(400, t + .35);
   g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(.13 * vel, t + .004);
   g.gain.exponentialRampToValueAtTime(.0005, t + 1.4);
   flt.connect(g);
@@ -1197,10 +1240,11 @@ function render(){
     <button class="key${k === nextKey ? ' next' : ''}" data-k="${k}" aria-pressed="${S.key === k}">
       <span class="l">${NOTES[k].l}</span><span class="s">${NOTES[k].s}</span><span class="k">${KEYMAP[k].toUpperCase()}</span>
     </button>`).join('');
-  $('timbres').innerHTML = TIMBRES.map((t, i) => `
+  $('timbres').innerHTML = TCATS.map(([c, title]) => `<div class="tgroup"><h3>${title}</h3><div class="tgrid">` +
+    TIMBRES.map((t, i) => t.cat !== c ? '' : `
     <button class="timbre" data-t="${t.id}" aria-pressed="${S.timbre === t.id}">
       <b>${t.name}<i>${i < 10 ? (i + 1) % 10 : ''}</i></b><span>${t.desc}</span>
-    </button>`).join('');
+    </button>`).join('') + '</div></div>').join('');
   $('chords').innerHTML = CHORDS.map(c => `<button class="chip" data-c="${c.id}" aria-pressed="${S.chord === c.id}">${c.name}<small>${c.hint}</small></button>`).join('');
   $('octs').innerHTML = OCTS.map(o => {
     const on = o.id === 'sub' ? S.sub : S.oct === o.id;
@@ -1756,6 +1800,16 @@ function syncCards(){
 
 $('keys').addEventListener('click', e => { const b = e.target.closest('[data-k]'); if (b) pressKey(+b.dataset.k); });
 $('timbres').addEventListener('click', e => { const b = e.target.closest('[data-t]'); if (b) { S.timbre = b.dataset.t; refreshVoice(); } });
+// Um toque deixa o pad pronto para a pregação: grave, escuro, sem ritmo nem troca de acordes.
+// Sai da música selecionada para não gravar esses ajustes nela.
+$('btnPreach').onclick = () => {
+  S.songId = null;
+  Object.assign(S, {timbre:'calmaria', chord:'n', oct:0, sub:true, arp:0, plucks:0, fill:60, bright:38, rev:65});
+  S.seq.on = false; S.prog.on = false;
+  applyMix(false);
+  if (S.key !== null) start(S.key, Math.min(fadeSec(), 3)); else render();
+  save();
+};
 $('chords').addEventListener('click', e => { const b = e.target.closest('[data-c]'); if (b) { S.chord = b.dataset.c; refreshVoice(); } });
 $('octs').addEventListener('click', e => {
   const b = e.target.closest('[data-o]'); if (!b) return;
