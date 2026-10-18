@@ -137,6 +137,11 @@ input[type=range]{width:100%;accent-color:var(--candle);height:28px}
 .dpad[data-g="caixa"]{--c:#e58a6b}
 .dpad[data-g="metal"]{--c:#8fb3ff}
 .dpad[data-g="efeito"]{--c:#b59cff}
+.dpad[data-g="fx"]{--c:#6fd3c4}
+.dpad.user small{color:var(--candle)}
+.dpads.editing .dpad{border-style:dashed}
+.drum-mix{display:grid;grid-template-columns:1fr 1fr;gap:18px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 16px}
+@media (max-width:560px){ .drum-mix{grid-template-columns:1fr} }
 .dpad.hit{background:color-mix(in srgb, var(--c) 22%, var(--surface));border-color:var(--c);transform:scale(.97)}
 .grooves{display:flex;flex-direction:column;gap:14px}
 .ggrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
@@ -458,9 +463,19 @@ dialog{max-height:calc(100vh - 32px);overflow-y:auto}
   <section data-tab="drums">
     <div class="sec-head">
       <h2>Drum pads</h2>
-      <div class="sl dvol"><label for="drumVol">Volume da bateria <output id="drumVolOut"></output></label><input type="range" id="drumVol" min="0" max="100" value="75"></div>
+      <button class="btn" id="btnMySounds" aria-pressed="false">Usar meus sons</button>
     </div>
+    <div class="drum-mix">
+      <div class="sl"><label for="drumVol">Volume da bateria <output id="drumVolOut"></output></label><input type="range" id="drumVol" min="0" max="100" value="75"></div>
+      <div class="sl"><label for="drumAmb">Ambiência (sala e reverb) <output id="drumAmbOut"></output></label><input type="range" id="drumAmb" min="0" max="100" value="60"></div>
+    </div>
+    <p class="note" id="mySoundsHint" hidden>Toque num pad para escolher um arquivo de áudio seu (WAV, MP3…) para ele. O som fica guardado neste aparelho. Toque em “Pronto” para voltar a tocar.</p>
     <div class="dpads" id="dpads"></div>
+  </section>
+
+  <section data-tab="drums">
+    <h2>Efeitos (FX)</h2>
+    <div class="dpads" id="fxpads"></div>
   </section>
 
   <section data-tab="drums">
@@ -517,7 +532,7 @@ dialog{max-height:calc(100vh - 32px);overflow-y:auto}
           <label class="field">Pads no canal 10 (bateria)
             <select id="mDrums">
               <option value="gm">Mapa GM (bateria eletrônica)</option>
-              <option value="seq">Notas 36–51 em ordem (controlador de pads)</option>
+              <option value="seq">Notas 36–59 em ordem: 16 pads + 8 FX (controlador de pads)</option>
               <option value="off">Não tocam a bateria</option>
             </select>
           </label>
@@ -565,6 +580,21 @@ dialog{max-height:calc(100vh - 32px);overflow-y:auto}
   </form>
 </dialog>
 
+<dialog id="dlgSample">
+  <div class="form">
+    <h3 id="sampleTitle">Som do pad</h3>
+    <p class="note" id="sampleInfo"></p>
+    <div class="dlg-actions">
+      <button type="button" class="btn danger" id="sampleReset">Voltar ao som original</button>
+      <div class="tools">
+        <button type="button" class="btn" id="sampleCancel">Cancelar</button>
+        <button type="button" class="btn primary" id="samplePick">Escolher arquivo…</button>
+      </div>
+    </div>
+    <input type="file" id="sampleFile" accept="audio/*" hidden>
+  </div>
+</dialog>
+
 <dialog id="dlgPaste">
   <div class="form">
     <h3>Colar set list</h3>
@@ -610,8 +640,8 @@ const TIMBRES = [
     layers:[{type:'sawtooth', det:[-9,0,9], gain:.2}, {type:'sine', oct:-1, gain:.3, rootOnly:true}]},
   {id:'cordas', name:'Cordas', desc:'Naipe de cordas lento', cutoff:2600, q:.5, lfo:[.11,700], vib:[5.2,7], level:.85,
     layers:[{type:'sawtooth', det:[-16,-6,6,16], gain:.17}]},
-  {id:'coral', name:'Coral', desc:'Vozes em “aah”', cutoff:4200, q:.4, vib:[4.6,11], formant:true, level:1.7,
-    layers:[{type:'sawtooth', det:[-8,8], gain:.35}]},
+  {id:'coral', name:'Coral', desc:'Vozes em “aah”', cutoff:4200, q:.4, vib:[4.6,11], formant:true, send:.6, chorus:.5, level:1.7,
+    layers:[{type:'sawtooth', det:[-14,-6,6,14], gain:.35}]},
   {id:'sonho', name:'Sonho', desc:'Pad quente + reverb shimmer subindo', cutoff:1700, q:.5, fenv:[450,4], lfo:[.06,300], chorus:.7,
     shimmerVerb:{level:.22, swell:6}, level:.9,
     layers:[{type:'sawtooth', det:[-10,0,10], gain:.17}, {type:'sine', oct:-1, gain:.25, rootOnly:true}]},
@@ -641,13 +671,13 @@ const TIMBRES = [
     layers:[{type:'triangle', det:[-10,10], gain:.36}, {type:'sine', oct:-1, gain:.4, rootOnly:true}, {type:'sawtooth', oct:-1, det:[-6,6], gain:.07}]},
   {id:'veludo', name:'Veludo', desc:'Cordas graves aveludadas', cutoff:1150, q:.4, fenv:[500,3], vib:[4.8,5], lfo:[.08,260], chorus:.5, send:.35, level:.9,
     layers:[{type:'sawtooth', det:[-12,-4,4,12], gain:.12}, {type:'triangle', oct:-1, gain:.26}]},
-  {id:'coralgrave', name:'Coral Grave', desc:'Vozes graves em “ooh”', cutoff:2000, q:.4, vib:[4.4,8], send:.3, level:1.9,
+  {id:'coralgrave', name:'Coral Grave', desc:'Vozes graves em “ooh”', cutoff:2000, q:.4, vib:[4.4,8], send:.6, chorus:.5, level:1.9,
     formant:[[400, 6, 1], [780, 8, .35], [2500, 10, .1], [260, 3, .45]],
-    layers:[{type:'sawtooth', oct:-1, det:[-7,7], gain:.35}]},
+    layers:[{type:'sawtooth', oct:-1, det:[-12,-4,4,12], gain:.35}]},
   {id:'orgsuave', name:'Órgão Suave', desc:'Flautas macias, sem rotativo', cutoff:2800, q:.3, trem:[4.2,.05], send:.4, level:.85,
     layers:[{wave:'flute', det:[-3,3], gain:.32}, {wave:'flute', oct:-1, gain:.2, rootOnly:true}]},
   // Inspirados nos estilos mais usados em pads de louvor (Catedral, Juno, feedback de guitarra)
-  {id:'catedral', name:'Catedral', desc:'Órgão e coro num salão enorme', cutoff:2400, q:.3, vib:[4.5,5], send:.85, level:1.2,
+  {id:'catedral', name:'Catedral', desc:'Órgão e coro num salão enorme', cutoff:2400, q:.3, vib:[4.5,5], send:1, chorus:.4, level:1.2,
     formant:[[400, 6, 1], [780, 8, .35], [2500, 10, .1], [260, 3, .45]],
     layers:[{type:'sawtooth', det:[-6,6], gain:.22}, {wave:'flute', det:[-2,2], gain:.24}, {wave:'flute', oct:-1, gain:.16, rootOnly:true}]},
   {id:'juno', name:'Juno', desc:'Synth anos 80 com chorus largo', cutoff:1800, q:.8, fenv:[600,2.5], lfo:[.1,350], chorus:1, level:.9,
@@ -702,7 +732,7 @@ function normSeq(q){
 }
 
 const DEF = {key:null, timbre:'sonho', chord:'n', oct:0, sub:false, vol:80, bright:62, rev:50, fade:30, order:'chrom',
-             arp:55, fill:45, plucks:30, bpm:72, vari:50, seq:SEQ_DEF, prog:null, songId:null, drumVol:75};
+             arp:55, fill:45, plucks:30, bpm:72, vari:50, seq:SEQ_DEF, prog:null, songId:null, drumVol:75, drumAmb:60};
 
 // Acordes da música: graus por modo — [nome, semitons acima da tônica, qualidade]
 const PROG_PAL = {
@@ -809,8 +839,9 @@ function initAudio(){
   drumBus = ctx.createGain(); drumBus.connect(master);
   drumRev = ctx.createGain(); drumRev.gain.value = .6; drumRev.connect(conv);
   const room = ctx.createConvolver(); room.buffer = makeRoomIR(1.1);
-  drumRoomIn = ctx.createGain(); const roomOut = ctx.createGain(); roomOut.gain.value = .6;
-  drumRoomIn.connect(room); room.connect(roomOut); roomOut.connect(drumBus);
+  drumRoomIn = ctx.createGain(); drumRoomOut = ctx.createGain();
+  drumRoomIn.connect(room); room.connect(drumRoomOut); drumRoomOut.connect(drumBus);
+  loadUserSamples();
   applyMix(true);
 }
 function harmonicWave(amps){
@@ -854,6 +885,8 @@ function applyMix(instant){
   seqGain.gain.setTargetAtTime(sv * .9, t, k); seqBass.gain.setTargetAtTime(sv, t, k);
   if (voice) voice.fill.gain.setTargetAtTime(fillLevel(), t, k);
   drumBus.gain.setTargetAtTime(Math.pow(S.drumVol / 100, 1.3) * 1.1, t, k);
+  const amb = S.drumAmb / 100;   // ambiência da bateria: sala + reverb longo
+  drumRoomOut.gain.setTargetAtTime(.25 + amb * 1.1, t, k); drumRev.gain.setTargetAtTime(.15 + amb * 1.1, t, k);
   const dt = Math.min(2.9, 60 / S.bpm * .75);   // colcheia pontuada
   dlL.delayTime.setTargetAtTime(dt, t, .05); dlR.delayTime.setTargetAtTime(dt, t, .05);
 }
@@ -909,6 +942,10 @@ class Voice {
         const gg = N(ctx.createGain()); gg.gain.value = g;
         entry.connect(bp); bp.connect(gg); gg.connect(filt);
       });
+      // Respiração: ruído passando pelos mesmos formantes, como o ar das vozes
+      const br = ctx.createBufferSource(); br.buffer = noiseBuf; br.loop = true;
+      const bg = N(ctx.createGain()); bg.gain.value = .045 * T.level;
+      br.connect(bg); bg.connect(entry); br.start(now); this.oscs.push(br);
     }
 
     const base = 48 + key + (S.oct * 12) + chordOff(pc);
@@ -925,7 +962,9 @@ class Voice {
           if (L.wave) o.setPeriodicWave(waves[L.wave]); else o.type = L.type;
           o.frequency.value = mtof(m + (L.oct || 0) * 12 + (L.semi || 0));
           o.detune.value = d + (Math.random() - .5) * 3;
-          if (vib) vib.connect(o.detune);
+          // Nas vozes, cada cantor tem seu próprio vibrato (velocidade e profundidade); nos outros, um só
+          if (T.formant && T.vib) lfo(T.vib[0] * (.85 + Math.random() * .3), T.vib[1] * (.7 + Math.random() * .6), o.detune);
+          else if (vib) vib.connect(o.detune);
           drift.connect(o.detune);
           const g = N(ctx.createGain()); g.gain.value = L.gain * noteGain / Math.sqrt(dets.length);
           o.connect(g);
@@ -1203,7 +1242,9 @@ function pulseNote(t, f, vel, dur){
 // ---------- Bateria acústica sintetizada ----------
 // Peles: modos de membrana (razões de Bessel) decaindo em tempos diferentes + ataque da baqueta.
 // Tudo passa por uma "sala" curta com primeiras reflexões, como num templo, e um pouco do reverb longo.
-let drumBus, drumRev, drumRoomIn;
+let drumBus, drumRev, drumRoomIn, drumRoomOut;
+let hv = 1;   // força da batida atual: mais forte = mais brilhante
+const vary = (x, amt) => x * (1 + (Math.random() - .5) * amt);
 const MEMBRANE = [1, 1.59, 2.14, 2.30, 2.65, 2.92, 3.16, 3.50];
 function makeRoomIR(sec){
   const sr = ctx.sampleRate, len = Math.floor(sr * sec), buf = ctx.createBuffer(2, len, sr);
@@ -1233,7 +1274,8 @@ function dout(node, {rev = .1, room = .4, pan = 0}, life){
   setTimeout(() => { try { node.disconnect(); last.disconnect(); sends.forEach(g => g.disconnect()); } catch(e) {} }, life * 1000 + 800);
 }
 function dnz(t, o){
-  const {type = 'highpass', f = 6000, f2, q = .7, gain = .5, a = .001, d = .1} = o;
+  const {type = 'highpass', q = .7, a = .001} = o;
+  const f = vary(o.f || 6000, .14) * (type === 'highpass' ? 1 : .8 + .25 * hv), f2 = o.f2, gain = vary(o.gain || .5, .12), d = vary(o.d || .1, .18);
   const src = ctx.createBufferSource(); src.buffer = noiseBuf; src.loop = true;
   const flt = ctx.createBiquadFilter(); flt.type = type; flt.Q.value = q;
   flt.frequency.setValueAtTime(f, t); if (f2) flt.frequency.exponentialRampToValueAtTime(f2, t + a + d);
@@ -1243,10 +1285,12 @@ function dnz(t, o){
 }
 // Corpo do tambor: soma de modos; `bright` controla quanto dos modos agudos aparece
 function dmodes(t, f, o){
-  const {gain = .8, d = .5, modes = 6, bright = .5, drop = .05, ratios = MEMBRANE, mallet = false} = o;
-  const out = ctx.createGain(); out.gain.value = gain;
+  const {gain = .8, modes = 6, drop = .05, ratios = MEMBRANE, mallet = false} = o;
+  const d = vary(o.d || .5, .16), bright = (o.bright || .5) * (.72 + .34 * hv);
+  f = vary(f, .025);   // afinação muda um pouco a cada batida, como pele de verdade
+  const out = ctx.createGain(); out.gain.value = vary(gain, .1);
   for (let i = 0; i < Math.min(modes, ratios.length); i++){
-    const osc = ctx.createOscillator(), fr = f * ratios[i];
+    const osc = ctx.createOscillator(), fr = f * ratios[i] * (1 + (Math.random() - .5) * .01);
     osc.frequency.setValueAtTime(fr * (1 + drop), t); osc.frequency.exponentialRampToValueAtTime(fr, t + .07);
     const g = ctx.createGain(), dec = d / (1 + i * .8);
     denv(g.gain, t, Math.pow(bright, i) * (i ? .7 : 1), mallet ? .009 : .0015, dec);
@@ -1344,13 +1388,138 @@ const DRUMS = [
       osc.connect(g); osc.start(t); osc.stop(t + d + .05); dout(g, {room:.3, rev:.1, pan:.35}, t - ctx.currentTime + d);
     }); }}
 ];
+// ---------- Efeitos (FX) ----------
+function fxOsc(t, type, f, f2, len, gain, o){
+  const osc = ctx.createOscillator(); osc.type = type; osc.frequency.setValueAtTime(f, t); osc.frequency.exponentialRampToValueAtTime(f2, t + len);
+  const g = ctx.createGain(); g.gain.setValueAtTime(.0001, t);
+  if (o.rise){ g.gain.linearRampToValueAtTime(gain, t + len); g.gain.linearRampToValueAtTime(.0001, t + len + .03); }
+  else { g.gain.linearRampToValueAtTime(gain, t + .02); g.gain.exponentialRampToValueAtTime(.0001, t + len); }
+  osc.connect(g); osc.start(t); osc.stop(t + len + .1); dout(g, o, t - ctx.currentTime + len);
+}
+function fxNoise(t, f, f2, len, gain, o){
+  const src = ctx.createBufferSource(); src.buffer = noiseBuf; src.loop = true;
+  const flt = ctx.createBiquadFilter(); flt.type = 'bandpass'; flt.Q.value = o.q || 1.5;
+  flt.frequency.setValueAtTime(f, t); flt.frequency.exponentialRampToValueAtTime(f2, t + len * (o.mid || 1));
+  if (o.mid) flt.frequency.exponentialRampToValueAtTime(o.f3, t + len);
+  const g = ctx.createGain(); g.gain.setValueAtTime(.0001, t);
+  if (o.rise){ g.gain.linearRampToValueAtTime(gain, t + len); g.gain.linearRampToValueAtTime(.0001, t + len + .03); }
+  else { g.gain.linearRampToValueAtTime(gain, t + len * (o.peak || .1)); g.gain.exponentialRampToValueAtTime(.0001, t + len); }
+  let last = g;
+  if (o.sweep && ctx.createStereoPanner){ const pn = ctx.createStereoPanner(); pn.pan.setValueAtTime(-o.sweep, t); pn.pan.linearRampToValueAtTime(o.sweep, t + len); g.connect(pn); last = pn; }
+  src.connect(flt); flt.connect(g); src.start(t, Math.random() * 2, len + .1);
+  dout(last, o, t - ctx.currentTime + len);
+}
+// Sons ao contrário: renderizados uma vez (fora do tempo real) e invertidos
+function renderReversed(sec, build){
+  const oc = new OfflineAudioContext(2, Math.ceil(ctx.sampleRate * sec), ctx.sampleRate);
+  build(oc);
+  return oc.startRendering().then(b => { for (let c = 0; c < 2; c++) b.getChannelData(c).reverse(); return b; });
+}
+function ocVerb(oc, node, wet){ const cv = oc.createConvolver(); cv.buffer = conv.buffer; const g = oc.createGain(); g.gain.value = wet; node.connect(cv); cv.connect(g); g.connect(oc.destination); }
+let revCrashP = null; const revSwellP = {};
+function revCrash(){
+  return revCrashP || (revCrashP = renderReversed(3, oc => {
+    const src = oc.createBufferSource(); src.buffer = noiseBuf; src.loop = true;
+    const hp = oc.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 3200;
+    const g = oc.createGain(); g.gain.setValueAtTime(.5, 0); g.gain.exponentialRampToValueAtTime(.0001, 2.6);
+    src.connect(hp); hp.connect(g); g.connect(oc.destination); ocVerb(oc, g, .5); src.start(0);
+  }));
+}
+function revSwell(key){
+  return revSwellP[key] || (revSwellP[key] = renderReversed(3.5, oc => {
+    const lp = oc.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1800;
+    const g = oc.createGain(); g.gain.setValueAtTime(.0001, 0); g.gain.linearRampToValueAtTime(.35, .02); g.gain.exponentialRampToValueAtTime(.0001, 3);
+    lp.connect(g); g.connect(oc.destination); ocVerb(oc, g, 1);
+    [0, 7, 12, 19].forEach(iv => [-7, 7].forEach(d => {
+      const o = oc.createOscillator(); o.type = 'sawtooth'; o.frequency.value = mtof(48 + key + iv); o.detune.value = d;
+      o.connect(lp); o.start(0); o.stop(3.2);
+    }));
+  }));
+}
+// Toca um som reverso terminando no tempo certo: dura `beats` tempos no andamento atual
+function playRev(p, t, v, beats){
+  p.then(b => {
+    const src = ctx.createBufferSource(); src.buffer = b;
+    src.playbackRate.value = Math.max(.6, Math.min(1.6, b.duration / (beats * 60 / S.bpm)));
+    const g = ctx.createGain(); g.gain.value = v; src.connect(g);
+    dout(g, {room:.1, rev:.25}, b.duration * 1.7);
+    src.start(Math.max(t, ctx.currentTime));
+  });
+}
+const FX = [
+  {id:'impacto', name:'Impacto', g:'fx', fx:true, play:(t, v) => {
+    dmodes(t, 38, {gain:1.1 * v, d:2.8, modes:4, bright:.45, drop:.6, mallet:true, room:.6, rev:.9});
+    dnz(t, {type:'lowpass', f:2500, f2:200, gain:.4 * v, d:.9, room:.5, rev:.9});
+    dnz(t, {f:3000, gain:.12 * v, d:1.8, rev:.8}); }},
+  {id:'revcrash', name:'Prato reverso', g:'fx', fx:true, play:(t, v) => playRev(revCrash(), t, v, 4)},
+  {id:'revswell', name:'Swell reverso', g:'fx', fx:true, play:(t, v) => playRev(revSwell(drumKey()), t, v, 4)},
+  {id:'whoosh', name:'Whoosh', g:'fx', fx:true, play:(t, v) => fxNoise(t, 400, 5000, 1.3, .45 * v, {mid:.5, f3:300, peak:.5, sweep:.8, rev:.6, room:.2})},
+  {id:'riser', name:'Subida', g:'fx', fx:true, play:(t, v) => {
+    const len = 60 / S.bpm * 4, k = drumKey();
+    fxNoise(t, 300, 8000, len, .4 * v, {rise:true, rev:.5, room:.2});
+    fxOsc(t, 'sawtooth', mtof(48 + k), mtof(72 + k), len, .05 * v, {rise:true, rev:.6}); }},
+  {id:'down', name:'Descida', g:'fx', fx:true, play:(t, v) => {
+    const k = drumKey();
+    fxNoise(t, 6000, 200, 2.2, .35 * v, {peak:.02, rev:.7, room:.2});
+    fxOsc(t, 'triangle', mtof(72 + k), mtof(36 + k), 2.2, .12 * v, {rev:.6}); }},
+  {id:'subdrop', name:'Sub drop', g:'fx', fx:true, play:(t, v) => {
+    fxOsc(t, 'sine', 90, 28, 2.2, .9 * v, {rev:.15, room:.1});
+    fxOsc(t, 'triangle', 180, 56, 1, .12 * v, {rev:.2}); }},
+  // Brilho: acorde agudo de sinos no tom, com reverb enorme
+  {id:'brilho', name:'Brilho', g:'fx', fx:true, play:(t, v) => {
+    const k = drumKey();
+    [12, 19, 24, 31].forEach((iv, i) => fxOsc(t + i * .025, 'sine', mtof(60 + k + iv), mtof(60 + k + iv), 3.5, .09 * v, {rev:1.2, room:.2, pan:(i - 1.5) * .3}));
+    dnz(t, {f:9000, gain:.06 * v, d:.6, rev:1}); }}
+];
+DRUMS.push(...FX);
 const DRUM = Object.fromEntries(DRUMS.map(d => [d.id, d]));
-const DRUM_PADS = DRUMS.filter(d => !d.hidden);
+const DRUM_PADS = DRUMS.filter(d => !d.hidden && !d.fx);
+const FX_PADS = DRUMS.filter(d => d.fx);
+
+// ---------- Sons do usuário (como no PadLab): qualquer pad pode tocar um arquivo seu ----------
+// Guardados no próprio aparelho (IndexedDB), nunca enviados para lugar nenhum.
+const idb = (() => {
+  let dbp;
+  const open = () => dbp || (dbp = new Promise((res, rej) => {
+    const r = indexedDB.open('e-pads', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('samples');
+    r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+  }));
+  const run = (mode, fn) => open().then(db => new Promise((res, rej) => {
+    const tx = db.transaction('samples', mode), req = fn(tx.objectStore('samples'));
+    tx.oncomplete = () => res(req && req.result); tx.onerror = () => rej(tx.error);
+  }));
+  return {
+    all: () => run('readonly', st => st.getAll()), keys: () => run('readonly', st => st.getAllKeys()),
+    set: (k, v) => run('readwrite', st => st.put(v, k)), del: k => run('readwrite', st => st.delete(k))
+  };
+})();
+const userBuf = {}, userName = {};
+function loadUserSamples(){
+  if (!window.indexedDB) return;
+  Promise.all([idb.keys(), idb.all()]).then(([ks, vs]) => {
+    ks.forEach((k, i) => {
+      userName[k] = vs[i].name;
+      ctx.decodeAudioData(vs[i].data.slice(0)).then(b => { userBuf[k] = b; }).catch(() => {});
+    });
+    renderPadGrids();
+  }).catch(() => {});
+}
+function playDrum(id, t, v){
+  hv = v;
+  const b = userBuf[id];
+  if (b){
+    const src = ctx.createBufferSource(); src.buffer = b; src.playbackRate.value = 1 + (Math.random() - .5) * .02;
+    const g = ctx.createGain(); g.gain.value = v; src.connect(g);
+    dout(g, {room:.25, rev:.12}, t - ctx.currentTime + b.duration);
+    src.start(t);
+  } else DRUM[id].play(t, v);
+}
 function hitDrum(id, vel = 1, t){
   if (!ctx) initAudio();
   if (ctx.state !== 'running') ctx.resume();
   const d = DRUM[id]; if (!d) return;
-  d.play(t || ctx.currentTime + .005, vel);
+  playDrum(id, t || ctx.currentTime + .005, vel);
   const el = document.querySelector(`[data-drum="${id}"]`);
   if (el){ el.classList.add('hit'); clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove('hit'), 110); }
 }
@@ -1386,11 +1555,11 @@ const FILLS = [
 ];
 let grv = null, grvNext, fillQueued = false, fillBar = false, fillPat = FILLS[0], lastGrv = 'tons', dbar = -1;
 const drumsBusy = () => !!(grv || grvNext || fillQueued || fillBar);
-const humanize = id => (['hatC', 'hatO', 'shaker', 'tri', 'ride'].includes(id) ? .008 : .004) * (Math.random() - .5);
+const humanize = id => (['hatC', 'hatO', 'shaker', 'tri', 'ride'].includes(id) ? .016 : .008) * (Math.random() - .5);
 function playPattern(pat, idx, t){
   for (const id in pat){
     const v = VEL[pat[id][idx]];
-    if (v) DRUM[id].play(Math.max(ctx.currentTime, t + humanize(id)), v * (.92 + Math.random() * .16));
+    if (v) playDrum(id, Math.max(ctx.currentTime, t + humanize(id)), Math.min(1.1, v * (.86 + Math.random() * .26)));
   }
 }
 function playDrums(s, t){
@@ -2078,11 +2247,58 @@ $('seqVol').addEventListener('input', e => {
   S.seq.vol = +e.target.value; $('seqVolOut').textContent = S.seq.vol + '%';
   applyMix(false); save();
 });
-const SLIDERS = ['vol', 'bright', 'rev', 'fade', 'arp', 'fill', 'plucks', 'bpm', 'vari', 'drumVol'];
+const SLIDERS = ['vol', 'bright', 'rev', 'fade', 'arp', 'fill', 'plucks', 'bpm', 'vari', 'drumVol', 'drumAmb'];
 // Drum pads: toca no toque (pointerdown) para responder rápido; teclado/leitor de tela usam o click
-$('dpads').innerHTML = DRUM_PADS.map((d, i) => `<button class="dpad" data-drum="${d.id}" data-g="${d.g}"><b>${d.name}</b><small>${i + 1}</small></button>`).join('');
-$('dpads').addEventListener('pointerdown', e => { const b = e.target.closest('[data-drum]'); if (b){ e.preventDefault(); hitDrum(b.dataset.drum); } });
-$('dpads').addEventListener('click', e => { const b = e.target.closest('[data-drum]'); if (b && e.detail === 0) hitDrum(b.dataset.drum); });
+let editSounds = false, samplePad = null;
+function renderPadGrids(){
+  const cell = (d, i) => `<button class="dpad${userName[d.id] ? ' user' : ''}" data-drum="${d.id}" data-g="${d.g}"><b>${d.name}</b><small>${userName[d.id] ? '♪ ' + esc(userName[d.id]).slice(0, 18) : i + 1}</small></button>`;
+  $('dpads').innerHTML = DRUM_PADS.map(cell).join('');
+  $('fxpads').innerHTML = FX_PADS.map((d, i) => cell(d, i + DRUM_PADS.length)).join('');
+  ['dpads', 'fxpads'].forEach(id => $(id).classList.toggle('editing', editSounds));
+}
+renderPadGrids();
+// Mostra nos pads os nomes dos sons guardados assim que o app abre (o áudio é decodificado depois)
+if (window.indexedDB) Promise.all([idb.keys(), idb.all()]).then(([ks, vs]) => { ks.forEach((k, i) => { userName[k] = vs[i].name; }); renderPadGrids(); }).catch(() => {});
+['dpads', 'fxpads'].forEach(gid => {
+  $(gid).addEventListener('pointerdown', e => {
+    const b = e.target.closest('[data-drum]'); if (!b) return;
+    e.preventDefault();
+    if (editSounds) openSample(b.dataset.drum); else hitDrum(b.dataset.drum);
+  });
+  $(gid).addEventListener('click', e => { const b = e.target.closest('[data-drum]'); if (b && e.detail === 0) (editSounds ? openSample : hitDrum)(b.dataset.drum); });
+});
+$('btnMySounds').onclick = () => {
+  editSounds = !editSounds;
+  $('btnMySounds').textContent = editSounds ? 'Pronto' : 'Usar meus sons';
+  $('btnMySounds').setAttribute('aria-pressed', editSounds);
+  $('mySoundsHint').hidden = !editSounds;
+  renderPadGrids();
+};
+function openSample(id){
+  samplePad = id;
+  $('sampleTitle').textContent = 'Som do pad “' + DRUM[id].name + '”';
+  $('sampleInfo').textContent = userName[id] ? 'Usando o arquivo: ' + userName[id] : 'Usando o som do app.';
+  $('sampleReset').hidden = !userName[id];
+  $('dlgSample').showModal();
+}
+$('sampleCancel').onclick = () => $('dlgSample').close();
+$('samplePick').onclick = () => $('sampleFile').click();
+$('sampleFile').onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f || !samplePad) return;
+  try {
+    if (!ctx) initAudio();
+    const data = await f.arrayBuffer();
+    const buf = await ctx.decodeAudioData(data.slice(0));
+    userBuf[samplePad] = buf; userName[samplePad] = f.name;
+    await idb.set(samplePad, {name: f.name, data});
+    $('dlgSample').close(); renderPadGrids(); hitDrum(samplePad);
+  } catch(err){ alert('Não consegui abrir esse arquivo de áudio.'); }
+};
+$('sampleReset').onclick = async () => {
+  delete userBuf[samplePad]; delete userName[samplePad];
+  try { await idb.del(samplePad); } catch(e) {}
+  $('dlgSample').close(); renderPadGrids();
+};
 function renderGrooves(){
   $('grooves').innerHTML = GCATS.map(([c, title]) => `<div class="tgroup"><h3>${title}</h3><div class="ggrid">` +
     GROOVES.filter(g => g.cat === c).map(g => `<button class="groove${grvNext === g.id ? ' pend' : ''}" data-grv="${g.id}" aria-pressed="${grv === g.id}"><b>${g.name}</b><span>${g.desc}</span></button>`).join('') +
@@ -2217,7 +2433,7 @@ const MIDI_ACTIONS = [
   {id:'fill', name:'Preenchimento', cc:true}, {id:'plucks', name:'Toques de synth', cc:true},
   {id:'seqVol', name:'Volume da sequência', cc:true},
   {id:'fill', name:'Virada (bateria)'},    {id:'groove', name:'Liga/desliga groove'},
-  {id:'drumVol', name:'Volume da bateria', cc:true}
+  {id:'drumVol', name:'Volume da bateria', cc:true}, {id:'drumAmb', name:'Ambiência da bateria', cc:true}
 ];
 const MDEF = {enabled:false, ch:0, notes:'switch', pc:'timbre', drums:'gm', map:{vol:{t:'cc', n:7}, bright:{t:'cc', n:1}}};
 let M = clone(MDEF);
@@ -2260,7 +2476,7 @@ function onMidi(e){
   // Canal 10 = bateria: toca os drum pads (antes do filtro de canal)
   if (!learn && ch === 10 && (type === 0x90 || type === 0x80) && (M.drums || 'gm') !== 'off'){
     if (type === 0x90 && d2 > 0){
-      const d = M.drums === 'seq' ? DRUM_PADS[d1 - 36] : DRUMS.find(x => x.gm.includes(d1));
+      const d = M.drums === 'seq' ? [...DRUM_PADS, ...FX_PADS][d1 - 36] : DRUMS.find(x => x.gm && x.gm.includes(d1));
       if (d) hitDrum(d.id, .35 + .65 * d2 / 127);
     }
     $('midiLed').classList.add('act'); clearTimeout(ledT); ledT = setTimeout(() => $('midiLed').classList.remove('act'), 90);

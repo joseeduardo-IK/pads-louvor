@@ -1,7 +1,7 @@
 // Guarda o app no aparelho para funcionar sem internet.
 // A página (navegação) vem da rede quando há internet, para sempre pegar a versão nova;
 // sem internet, usa a cópia guardada. Os outros arquivos vêm do cache primeiro.
-const CACHE = 'pads-louvor-v10';
+const CACHE = 'pads-louvor-v11';
 const FILES = ['./', 'index.html', 'manifest.webmanifest', 'icon.svg'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)));
