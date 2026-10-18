@@ -5,11 +5,12 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0d0e1a">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="E-Pads">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <style>html,body{margin:0}*,*::before,*::after{box-sizing:border-box}[hidden]{display:none!important}:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}</style>
-<title>Pads de Louvor</title>
+<title>E-Pads</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Figtree:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
@@ -137,14 +138,15 @@ input[type=range]{width:100%;accent-color:var(--candle);height:28px}
 .dpad[data-g="metal"]{--c:#8fb3ff}
 .dpad[data-g="efeito"]{--c:#b59cff}
 .dpad.hit{background:color-mix(in srgb, var(--c) 22%, var(--surface));border-color:var(--c);transform:scale(.97)}
-.grooves{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.grooves{display:flex;flex-direction:column;gap:14px}
+.ggrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
 .groove{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;text-align:left;display:flex;flex-direction:column;gap:2px}
 .groove b{font-weight:600}
 .groove span{font-size:.78rem;color:var(--muted)}
 .groove[aria-pressed="true"]{border-color:var(--candle);background:var(--candle-soft)}
 .groove[aria-pressed="true"] b{color:var(--candle)}
 .groove.pend{border-style:dashed;border-color:var(--candle)}
-@media (max-width:760px){ .grooves{grid-template-columns:1fr 1fr} .dpads{gap:8px} .dpad{aspect-ratio:1.1} .dpad b{font-size:.9rem} }
+@media (max-width:760px){ .ggrid{grid-template-columns:1fr 1fr} .dpads{gap:8px} .dpad{aspect-ratio:1.1} .dpad b{font-size:.9rem} }
 
 /* Botões genéricos */
 .btn{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:7px 12px;font-size:.82rem;white-space:nowrap}
@@ -302,7 +304,7 @@ dialog{max-height:calc(100vh - 32px);overflow-y:auto}
 
 <div class="wrap">
   <header>
-    <h1>Pads de <span>Louvor</span></h1>
+    <h1>E-<span>Pads</span></h1>
     <div class="hint desk">Teclado: <kbd>A W S E D F T G Y H U J</kbd> = tons · <kbd>1</kbd>–<kbd>0</kbd> = timbres · <kbd>←</kbd> <kbd>→</kbd> = músicas · <kbd>↑</kbd> <kbd>↓</kbd> = acordes · <kbd>Espaço</kbd> = parar</div>
   </header>
 
@@ -470,7 +472,7 @@ dialog{max-height:calc(100vh - 32px);overflow-y:auto}
       </div>
     </div>
     <div class="grooves" id="grooves"></div>
-    <p class="note">Os grooves seguem o andamento (BPM) e tocam mesmo com o pad parado. Trocar de groove ou pedir uma virada entra na virada do próximo compasso; a virada termina com prato. O Swell de prato cresce por 2 tempos e a Subida por 1 compasso — ótimos para entrar no refrão. O Sub 808 toca na tônica do tom atual. Controladores de pads e baterias eletrônicas no canal MIDI 10 tocam os pads.</p>
+    <p class="note">Os grooves seguem o andamento (BPM) e tocam mesmo com o pad parado. Trocar de groove ou pedir uma virada entra na virada do próximo compasso; a virada termina com prato. O Swell de prato cresce por 2 tempos e o Rufo de caixa por 1 compasso — ótimos para entrar no refrão. O Crescendo sobe por 4 compassos e entra sozinho no groove Hino, com prato. Controladores de pads e baterias eletrônicas no canal MIDI 10 tocam os pads.</p>
   </section>
 
   <section data-tab="ajustes">
@@ -806,6 +808,9 @@ function initAudio(){
 
   drumBus = ctx.createGain(); drumBus.connect(master);
   drumRev = ctx.createGain(); drumRev.gain.value = .6; drumRev.connect(conv);
+  const room = ctx.createConvolver(); room.buffer = makeRoomIR(1.1);
+  drumRoomIn = ctx.createGain(); const roomOut = ctx.createGain(); roomOut.gain.value = .6;
+  drumRoomIn.connect(room); room.connect(roomOut); roomOut.connect(drumBus);
   applyMix(true);
 }
 function harmonicWave(amps){
@@ -1195,85 +1200,152 @@ function pulseNote(t, f, vel, dur){
   });
   setTimeout(() => { try { g.disconnect(); flt.disconnect(); p && p.disconnect(); } catch(e) {} }, (t - ctx.currentTime + len + .3) * 1000);
 }
-// ---------- Bateria (sintetizada, estilo louvor: graves com ar, caixa com reverb, swells) ----------
-let drumBus, drumRev;
+// ---------- Bateria acústica sintetizada ----------
+// Peles: modos de membrana (razões de Bessel) decaindo em tempos diferentes + ataque da baqueta.
+// Tudo passa por uma "sala" curta com primeiras reflexões, como num templo, e um pouco do reverb longo.
+let drumBus, drumRev, drumRoomIn;
+const MEMBRANE = [1, 1.59, 2.14, 2.30, 2.65, 2.92, 3.16, 3.50];
+function makeRoomIR(sec){
+  const sr = ctx.sampleRate, len = Math.floor(sr * sec), buf = ctx.createBuffer(2, len, sr);
+  for (let ch = 0; ch < 2; ch++){
+    const d = buf.getChannelData(ch); let y = 0;
+    for (let i = 0; i < len; i++){
+      const t = i / len, x = (Math.random() * 2 - 1) * Math.pow(1 - t, 5);
+      y += (.3 + .4 * (1 - t)) * (x - y); d[i] = y * .9;
+    }
+    // primeiras reflexões (paredes, chão, teto), levemente diferentes em cada lado
+    [.006, .011, .016, .023, .031, .043].forEach((r, k) => {
+      const j = Math.floor((r + ch * .0017) * sr); if (j < len) d[j] += (k % 2 ? -1 : 1) * (.45 - k * .05);
+    });
+  }
+  return buf;
+}
 function denv(param, t, peak, a, d){
   param.setValueAtTime(0.0001, t); param.linearRampToValueAtTime(peak, t + a); param.exponentialRampToValueAtTime(0.0001, t + a + d);
 }
-function dout(node, rev, pan, life){
+function dout(node, {rev = .1, room = .4, pan = 0}, life){
   let last = node;
   if (pan && ctx.createStereoPanner){ const pn = ctx.createStereoPanner(); pn.pan.value = pan; node.connect(pn); last = pn; }
   last.connect(drumBus);
-  let sg = null; if (rev){ sg = ctx.createGain(); sg.gain.value = rev; last.connect(sg); sg.connect(drumRev); }
-  setTimeout(() => { try { node.disconnect(); last.disconnect(); sg && sg.disconnect(); } catch(e) {} }, life * 1000 + 600);
+  const sends = [];
+  if (rev){ const g = ctx.createGain(); g.gain.value = rev; last.connect(g); g.connect(drumRev); sends.push(g); }
+  if (room){ const g = ctx.createGain(); g.gain.value = room; last.connect(g); g.connect(drumRoomIn); sends.push(g); }
+  setTimeout(() => { try { node.disconnect(); last.disconnect(); sends.forEach(g => g.disconnect()); } catch(e) {} }, life * 1000 + 800);
 }
-function dnz(t, {type = 'highpass', f = 6000, f2, q = .7, gain = .5, a = .001, d = .1, rev = .15, pan = 0}){
+function dnz(t, o){
+  const {type = 'highpass', f = 6000, f2, q = .7, gain = .5, a = .001, d = .1} = o;
   const src = ctx.createBufferSource(); src.buffer = noiseBuf; src.loop = true;
   const flt = ctx.createBiquadFilter(); flt.type = type; flt.Q.value = q;
   flt.frequency.setValueAtTime(f, t); if (f2) flt.frequency.exponentialRampToValueAtTime(f2, t + a + d);
   const g = ctx.createGain(); denv(g.gain, t, gain, a, d);
-  src.connect(flt); flt.connect(g); dout(g, rev, pan, t - ctx.currentTime + a + d);
+  src.connect(flt); flt.connect(g); dout(g, o, t - ctx.currentTime + a + d);
   src.start(t, Math.random() * 2, a + d + .05);
 }
-function dtone(t, {type = 'sine', f, f2, glide = .1, gain = .8, a = .002, d = .4, rev = .1, pan = 0}){
-  const o = ctx.createOscillator(); o.type = type;
-  o.frequency.setValueAtTime(f, t); if (f2) o.frequency.exponentialRampToValueAtTime(f2, t + glide);
-  const g = ctx.createGain(); denv(g.gain, t, gain, a, d);
-  o.connect(g); dout(g, rev, pan, t - ctx.currentTime + a + d);
-  o.start(t); o.stop(t + a + d + .05);
+// Corpo do tambor: soma de modos; `bright` controla quanto dos modos agudos aparece
+function dmodes(t, f, o){
+  const {gain = .8, d = .5, modes = 6, bright = .5, drop = .05, ratios = MEMBRANE, mallet = false} = o;
+  const out = ctx.createGain(); out.gain.value = gain;
+  for (let i = 0; i < Math.min(modes, ratios.length); i++){
+    const osc = ctx.createOscillator(), fr = f * ratios[i];
+    osc.frequency.setValueAtTime(fr * (1 + drop), t); osc.frequency.exponentialRampToValueAtTime(fr, t + .07);
+    const g = ctx.createGain(), dec = d / (1 + i * .8);
+    denv(g.gain, t, Math.pow(bright, i) * (i ? .7 : 1), mallet ? .009 : .0015, dec);
+    osc.connect(g); g.connect(out); osc.start(t); osc.stop(t + dec + .05);
+  }
+  dout(out, o, t - ctx.currentTime + d);
+}
+// Parciais inarmônicos de prato (som metálico real, não só chiado)
+function dmetal(t, base, o){
+  const {gain = .03, d = 1.5, ratios = [1, 1.47, 2.09, 2.69, 3.76, 5.4, 7.2]} = o;
+  const out = ctx.createGain(); denv(out.gain, t, gain, .003, d);
+  ratios.forEach((r, i) => {
+    const osc = ctx.createOscillator(); osc.type = i % 2 ? 'square' : 'sine'; osc.frequency.value = base * r * (.995 + Math.random() * .01);
+    const g = ctx.createGain(); g.gain.value = i % 2 ? .25 : 1; osc.connect(g); g.connect(out); osc.start(t); osc.stop(t + d + .05);
+  });
+  const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 2500; out.connect(hp);
+  dout(hp, o, t - ctx.currentTime + d);
+}
+function snareHit(t, v, light){
+  dmodes(t, 186, {gain:(light ? .25 : .5) * v, d:.16, modes:5, ratios:[1, 1.06, 1.59, 1.68, 2.14], bright:.6, drop:.04, room:.6, rev:.22});
+  dnz(t + .002, {type:'bandpass', f:4200, q:.45, gain:(light ? .45 : .75) * v, a:.002, d:light ? .09 : .2 + .06 * v, room:.6, rev:.28});   // esteira
+  dnz(t, {type:'bandpass', f:2800, q:1.4, gain:.28 * v, d:.006, room:.3});   // baqueta
 }
 const drumKey = () => S.key !== null ? S.key : (curSong() ? curSong().key : 0);
-// Grupos: grave, caixa, metais, efeitos (cor no pad). `gm` = notas MIDI da bateria GM
+// Grupos: grave, caixa, metal, efeito (cor do pad). `gm` = notas MIDI da bateria GM. `hidden` = só nos grooves
 const DRUMS = [
   {id:'kick', name:'Bumbo', g:'grave', gm:[35, 36], play:(t, v) => {
-    dtone(t, {f:150, f2:45, glide:.12, gain:1 * v, d:.55, rev:.08});
-    dnz(t, {f:3000, gain:.15 * v, d:.015, rev:0}); }},
-  {id:'snare', name:'Caixa', g:'caixa', gm:[38, 40], play:(t, v) => {
-    dtone(t, {type:'triangle', f:200, f2:170, glide:.05, gain:.45 * v, d:.12, rev:.35});
-    dnz(t, {type:'bandpass', f:1900, q:.8, gain:.75 * v, d:.2, rev:.5}); }},
+    dmodes(t, 57, {gain:1.05 * v, d:.42, modes:3, bright:.32, drop:.22, room:.22, rev:.04});
+    dnz(t, {type:'lowpass', f:160, gain:.55 * v, d:.06, room:.2});
+    dnz(t, {type:'bandpass', f:2600, q:1, gain:.22 * v, d:.007, room:.1}); }},
+  {id:'snare', name:'Caixa', g:'caixa', gm:[38, 40], play:(t, v) => snareHit(t, v)},
+  // Palmas de grupo: várias pessoas, cada uma um pouco fora do tempo
   {id:'clap', name:'Palmas', g:'caixa', gm:[39], play:(t, v) => {
-    [0, .011, .023].forEach(o => dnz(t + o, {type:'bandpass', f:1300, q:1.2, gain:.45 * v, d:.018, rev:.2}));
-    dnz(t + .03, {type:'bandpass', f:1250, q:1, gain:.5 * v, d:.22, rev:.55}); }},
+    for (let i = 0; i < 6; i++) dnz(t + Math.random() * .028, {type:'bandpass', f:900 + Math.random() * 900, q:1.6, gain:.3 * v, d:.014 + Math.random() * .01, room:.75, rev:.3, pan:(Math.random() - .5) * .7}); }},
   {id:'snap', name:'Estalo', g:'caixa', gm:[56], play:(t, v) => {
-    dnz(t, {type:'bandpass', f:2600, q:2, gain:.6 * v, d:.06, rev:.45, pan:.15});
-    dtone(t, {f:1800, gain:.15 * v, d:.02, rev:.2, pan:.15}); }},
+    dnz(t, {type:'bandpass', f:2600, q:2, gain:.55 * v, d:.05, room:.55, rev:.3, pan:.15});
+    dnz(t + .004, {type:'bandpass', f:1300, q:3, gain:.25 * v, d:.03, room:.5, pan:.15}); }},
   {id:'tomL', name:'Surdo', g:'grave', gm:[41, 43], play:(t, v) => {
-    dtone(t, {f:105, f2:78, glide:.25, gain:.95 * v, d:.9, rev:.35, pan:-.15});
-    dnz(t, {type:'lowpass', f:900, gain:.25 * v, d:.08, rev:.3, pan:-.15}); }},
+    dmodes(t, 92, {gain:.95 * v, d:1, modes:5, bright:.42, drop:.08, room:.55, rev:.28, pan:-.15});
+    dnz(t, {type:'bandpass', f:1400, q:1, gain:.2 * v, d:.012, room:.4, pan:-.15}); }},
   {id:'tomM', name:'Tom', g:'grave', gm:[45, 47, 48, 50], play:(t, v) => {
-    dtone(t, {f:160, f2:118, glide:.2, gain:.8 * v, d:.6, rev:.3, pan:.15});
-    dnz(t, {type:'lowpass', f:1400, gain:.2 * v, d:.06, rev:.25, pan:.15}); }},
+    dmodes(t, 138, {gain:.85 * v, d:.65, modes:5, bright:.45, drop:.07, room:.5, rev:.25, pan:.15});
+    dnz(t, {type:'bandpass', f:1800, q:1, gain:.2 * v, d:.01, room:.4, pan:.15}); }},
+  // Aro (cross-stick): som de madeira, curto
   {id:'rim', name:'Aro', g:'caixa', gm:[37], play:(t, v) => {
-    dtone(t, {type:'triangle', f:1700, gain:.35 * v, d:.03, rev:.25});
-    dnz(t, {type:'bandpass', f:3500, q:3, gain:.3 * v, d:.025, rev:.2}); }},
-  {id:'boom', name:'Boom', g:'grave', gm:[60], play:(t, v) => {
-    dtone(t, {f:70, f2:32, glide:.9, gain:1 * v, d:2.2, rev:.5});
-    dnz(t, {type:'lowpass', f:400, gain:.35 * v, d:.6, rev:.6}); }},
-  {id:'hatC', name:'Chimbal', g:'metal', gm:[42, 44], play:(t, v) => dnz(t, {f:7500, gain:.32 * v, d:.045, rev:.05, pan:.25})},
-  {id:'hatO', name:'Chimbal aberto', g:'metal', gm:[46], play:(t, v) => dnz(t, {f:7000, gain:.28 * v, d:.35, rev:.12, pan:.25})},
-  {id:'shaker', name:'Shaker', g:'metal', gm:[69, 70], play:(t, v) => dnz(t, {type:'bandpass', f:6500, q:1.5, gain:.32 * v, a:.012, d:.07, rev:.1, pan:-.25})},
+    dmodes(t, 510, {gain:.4 * v, d:.06, modes:4, ratios:[1, 2.32, 4.1, 6.3], bright:.55, drop:0, room:.6, rev:.2});
+    dnz(t, {type:'bandpass', f:2200, q:2, gain:.22 * v, d:.015, room:.5}); }},
+  {id:'taiko', name:'Taiko', g:'grave', gm:[60], play:(t, v) => {
+    dmodes(t, 47, {gain:1.05 * v, d:1.9, modes:5, bright:.5, drop:.12, mallet:true, room:.8, rev:.5});
+    dnz(t, {type:'lowpass', f:700, gain:.35 * v, d:.05, room:.8}); }},
+  {id:'hatC', name:'Chimbal', g:'metal', gm:[42, 44], play:(t, v) => {
+    dnz(t, {f:7200, gain:.22 * v, d:.035 + .02 * v, room:.15, rev:.03, pan:.25});
+    dnz(t, {type:'bandpass', f:9800, q:3, gain:.14 * v, d:.03, room:.1, pan:.25}); }},
+  {id:'hatO', name:'Chimbal aberto', g:'metal', gm:[46], play:(t, v) => {
+    dnz(t, {f:6500, gain:.22 * v, d:.42, room:.2, rev:.08, pan:.25});
+    dmetal(t, 820, {gain:.02 * v, d:.4, room:.15, pan:.25}); }},
+  {id:'shaker', name:'Shaker', g:'metal', gm:[69, 70], play:(t, v) => dnz(t, {type:'bandpass', f:5800, q:1.2, gain:.26 * v, a:.018, d:.05, room:.3, rev:.05, pan:-.25})},
   {id:'tamb', name:'Pandeirola', g:'metal', gm:[54], play:(t, v) => {
-    dnz(t, {f:8500, gain:.25 * v, d:.18, rev:.15, pan:.3});
-    dnz(t, {type:'bandpass', f:11000, q:4, gain:.2 * v, d:.25, rev:.15, pan:.3}); }},
+    dnz(t, {f:7000, gain:.18 * v, d:.14, room:.35, pan:.3});
+    dnz(t + .003, {type:'bandpass', f:9200, q:6, gain:.18 * v, d:.3, room:.35, pan:.3});
+    dnz(t + .006, {type:'bandpass', f:12400, q:6, gain:.12 * v, d:.25, room:.3, pan:.3});
+    dmodes(t, 300, {gain:.12 * v, d:.05, modes:2, room:.3, pan:.3}); }},
   {id:'crash', name:'Prato', g:'efeito', gm:[49, 57], play:(t, v) => {
-    dnz(t, {f:4500, gain:.45 * v, d:2.2, rev:.4, pan:-.2});
-    dnz(t, {type:'bandpass', f:9000, q:.6, gain:.2 * v, d:1.4, rev:.4, pan:-.2}); }},
-  // Swell de prato com baqueta: cresce por 2 tempos e se abre
-  {id:'swell', name:'Swell de prato', g:'efeito', gm:[51, 55], play:(t, v) => {
-    const len = 60 / S.bpm * 2;
-    dnz(t, {f:3000, f2:7000, gain:.4 * v, a:len, d:1.8, rev:.5, pan:-.1}); }},
-  // Subida: ruído varrendo para cima por 1 compasso, para entrar no refrão
-  {id:'riser', name:'Subida', g:'efeito', gm:[52, 62], play:(t, v) => {
-    const len = 60 / S.bpm * 4;
-    dnz(t, {type:'bandpass', f:300, f2:7000, q:2, gain:.4 * v, a:len, d:.15, rev:.5}); }},
-  // Sub 808 afinado na tônica do tom atual
-  {id:'sub808', name:'Sub 808', g:'grave', gm:[61], play:(t, v) => {
-    const f = mtof(36 + drumKey());
-    dtone(t, {f:f * 1.6, f2:f, glide:.05, gain:.95 * v, d:1.6, rev:.08});
-    dnz(t, {f:2500, gain:.12 * v, d:.012, rev:0}); }}
+    dnz(t, {f:3500, gain:.32 * v, a:.004, d:2.4, room:.3, rev:.32, pan:-.2});
+    dnz(t, {type:'bandpass', f:6500, q:.8, gain:.18 * v, d:1.6, room:.3, pan:-.2});
+    dmetal(t, 430, {gain:.035 * v, d:2, room:.3, rev:.3, pan:-.2}); }},
+  // Swell de prato com baqueta de feltro: batidas rápidas crescendo por 2 tempos
+  {id:'swell', name:'Swell de prato', g:'efeito', gm:[55], play:(t, v) => {
+    const len = 60 / S.bpm * 2, n = Math.max(8, Math.round(len * 14));
+    for (let i = 0; i < n; i++){
+      const k = i / n;
+      dnz(t + k * len, {f:3200, gain:(.03 + .3 * k * k) * v, a:.01, d:.18, room:.35, rev:.3, pan:-.1 + (i % 2) * .2});
+    }
+    dnz(t + len, {f:3000, gain:.32 * v, a:.004, d:2.2, room:.3, rev:.4, pan:-.1});
+    dmetal(t + len, 440, {gain:.03 * v, d:1.8, room:.3, rev:.3}); }},
+  // Rufo de caixa: toques em fusas crescendo por 1 compasso, para entrar no refrão
+  {id:'rufo', name:'Rufo de caixa', g:'efeito', gm:[52, 62], play:(t, v) => {
+    const step = stepDur() / 2;
+    for (let i = 0; i < 32; i++){ const k = i / 31; snareHit(t + i * step + (Math.random() - .5) * .004, (.12 + .88 * k * k) * v, true); }
+    snareHit(t + 32 * step, v); }},
+  // Bumbo orquestral (gran cassa) com maceta: fundo grave e longo
+  {id:'orq', name:'Bumbo orquestral', g:'grave', gm:[61], play:(t, v) => {
+    dmodes(t, 42, {gain:.95 * v, d:2.6, modes:6, bright:.55, drop:.03, mallet:true, room:.8, rev:.6});
+    dnz(t, {type:'lowpass', f:400, gain:.2 * v, a:.01, d:.3, room:.8}); }},
+  // Só nos grooves
+  {id:'ride', name:'Ride', hidden:true, gm:[51, 53, 59], play:(t, v) => {
+    dmetal(t, 2950, {gain:.035 * v, d:.9, ratios:[1, 1.48, 2.16], room:.25, rev:.12, pan:.3});
+    dnz(t, {type:'bandpass', f:7000, q:1, gain:.1 * v, d:.5, room:.25, pan:.3});
+    dnz(t, {f:5000, gain:.08 * v, d:.008, room:.1, pan:.3}); }},
+  {id:'tri', name:'Triângulo', hidden:true, gm:[80, 81], play:(t, v) => {
+    const open = v >= .9, d = open ? .55 : .07;
+    [[4200, 1], [6150, .5], [8300, .3]].forEach(([f, a]) => {
+      const osc = ctx.createOscillator(); osc.frequency.value = f;
+      const g = ctx.createGain(); denv(g.gain, t, .09 * a * v, .001, d);
+      osc.connect(g); osc.start(t); osc.stop(t + d + .05); dout(g, {room:.3, rev:.1, pan:.35}, t - ctx.currentTime + d);
+    }); }}
 ];
 const DRUM = Object.fromEntries(DRUMS.map(d => [d.id, d]));
-let lastHitUI = null;
+const DRUM_PADS = DRUMS.filter(d => !d.hidden);
 function hitDrum(id, vel = 1, t){
   if (!ctx) initAudio();
   if (ctx.state !== 'running') ctx.resume();
@@ -1282,37 +1354,72 @@ function hitDrum(id, vel = 1, t){
   const el = document.querySelector(`[data-drum="${id}"]`);
   if (el){ el.classList.add('hit'); clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove('hit'), 110); }
 }
-// Grooves: 16 semicolcheias por compasso; x = acento, o = normal
+// Grooves: 16 semicolcheias por compasso (ou 12 tercinas com `trip`), `bars` compassos.
+// X = acento, x = forte, o = normal, g = nota fantasma. `then` = groove que entra quando acabar (com prato).
+const VEL = {X:1, x:.85, o:.55, g:.28};
+const GCATS = [['min', 'Ministração'], ['build', 'Crescendo'], ['cel', 'Celebração'], ['br', 'Brasil']];
 const GROOVES = [
-  {id:'pulso', name:'Pulso', desc:'Bumbo nos 4 tempos, para crescer', p:{kick:'x...x...x...x...', hatC:'..o...o...o...o.'}},
-  {id:'tons', name:'Tons', desc:'Surdo em colcheias, típico de build', p:{tomL:'x.o.o.o.x.o.o.o.', kick:'x.......x.......', tomM:'......o.......o.'}},
-  {id:'balada', name:'Balada', desc:'Aro e chimbal, bem suave', p:{kick:'x.........o.....', rim:'....x.......x...', hatC:'o.o.o.o.o.o.o.o.'}},
-  {id:'pop', name:'Pop', desc:'Groove reto para músicas animadas', p:{kick:'x.....o.x.......', snare:'....x.......x...', hatC:'o.o.o.o.o.o.o.o.'}},
-  {id:'meio', name:'Meia-tempo', desc:'Caixa e palmas no 3, shaker corrido', p:{kick:'x.........o.....', snare:'........x.......', clap:'........x.......', shaker:'xoooxoooxoooxooo'}},
-  {id:'shaker', name:'Shaker', desc:'Shaker e estalos, para ministração', p:{shaker:'xoooxoooxoooxooo', snap:'....x.......x...'}}
+  {id:'coracao', cat:'min', name:'Batida do coração', desc:'Bumbo duplo e shaker leve', p:{kick:'X..o....X..o....', shaker:'g.g.g.g.g.g.g.g.'}},
+  {id:'aro', cat:'min', name:'Aro no 3', desc:'Balada lenta em meia-tempo', p:{kick:'X.........o.....', rim:'........x.......', hatC:'o.g.o.g.o.g.o.g.'}},
+  {id:'ternario', cat:'min', name:'12/8', desc:'Ternário para baladas em 6/8', trip:true, p:{kick:'X.....x..o..', rim:'......x.....', hatC:'xooxooxooxoo'}},
+  {id:'shaker', cat:'min', name:'Shaker e estalos', desc:'Leve, para oração', p:{shaker:'xgogxgogxgogxgog', snap:'....x.......x...'}},
+  {id:'pulso', cat:'build', name:'Pulso', desc:'Bumbo nos 4 tempos', p:{kick:'X...x...x...x...', hatC:'g.o.g.o.g.o.g.o.'}},
+  {id:'tons', cat:'build', name:'Surdo', desc:'Surdo em colcheias, o build clássico', p:{tomL:'X.o.x.o.X.o.x.o.', kick:'X.......x.......', tomM:'......o.......o.'}},
+  {id:'tribal', cat:'build', name:'Toms 3+3+2', desc:'Toms tribais com energia', p:{tomL:'X..x..x.X..x..x.', kick:'X.......X.......', tomM:'.......o.......o'}},
+  {id:'cresc', cat:'build', name:'Crescendo', desc:'4 compassos subindo até o refrão', bars:4, then:'hino', p:{
+    kick:  'X...x...x...x...' + 'X.x.x.x.x.x.x.x.' + 'X.x.x.x.x.x.x.x.' + 'X.x.x.x.X.x.x.x.',
+    tomL:  '................' + 'x...x...x...x...' + 'x.x.x.x.x.x.x.x.' + '................',
+    tomM:  '................' + '................' + '..o...o...o...o.' + '................',
+    snare: '................' + '................' + '................' + 'ggoooooxxxxxXXXX'}},
+  {id:'hino', cat:'cel', name:'Hino', desc:'4 no chão, chimbal aberto nos contratempos', p:{kick:'X...x...X...x...', snare:'....X.......X...', hatO:'..o...o...o...o.', hatC:'g...g...g...g...'}},
+  {id:'pop', cat:'cel', name:'Pop', desc:'Groove reto, chimbal em colcheias', p:{kick:'X.....o.x.......', snare:'....X.......X...', hatC:'x.o.x.o.x.o.x.o.'}},
+  {id:'colcheias', cat:'cel', name:'Refrão cheio', desc:'Bumbo em colcheias e condução no ride', p:{kick:'X.x.X.x.X.x.X.x.', snare:'....X.......X...', ride:'x.o.x.o.x.o.x.o.'}},
+  {id:'meio', cat:'cel', name:'Meia-tempo', desc:'Caixa e palmas no 3, shaker corrido', p:{kick:'X.........o.....', snare:'........X.......', clap:'........x.......', shaker:'xgogxgogxgogxgog'}},
+  {id:'gospel', cat:'cel', name:'Gospel', desc:'Notas fantasmas na caixa, chimbal em semicolcheias', p:{kick:'X.....x.x.....x.', snare:'....X..g.g..X..g', hatC:'xoxoxoxoxoxoxoxo'}},
+  {id:'baiao', cat:'br', name:'Baião', desc:'Zabumba e triângulo', p:{kick:'X..x....X..x....', rim:'......o.......o.', tri:'XoxxXoxxXoxxXoxx'}},
+  {id:'xote', cat:'br', name:'Xote', desc:'Balanço leve com triângulo', p:{kick:'X.....x.X.......', rim:'....x.......x...', shaker:'x.o.x.o.x.o.x.o.', tri:'X.o.X.o.X.o.X.o.'}}
 ];
-const FILL = {tomM:'x.x.x.x.........', tomL:'........x.x.x.xx', kick:'x.......x.......', snare:'..............xx'};
-let grv = null, grvNext, fillQueued = false, fillBar = false, lastGrv = 'pulso';
+const FILLS = [
+  {tomM:'X.x.x.x.........', tomL:'........X.x.x.xx', kick:'X.......x.......', snare:'..............xX'},
+  {snare:'ggooooxxxxxxXXXX', kick:'X...X...X...X...'},
+  {tomM:'X.x.X.x.........', snare:'........X.x.X.xx', tomL:'..............X.', kick:'X.......X.......'}
+];
+let grv = null, grvNext, fillQueued = false, fillBar = false, fillPat = FILLS[0], lastGrv = 'tons', dbar = -1;
 const drumsBusy = () => !!(grv || grvNext || fillQueued || fillBar);
+const humanize = id => (['hatC', 'hatO', 'shaker', 'tri', 'ride'].includes(id) ? .008 : .004) * (Math.random() - .5);
+function playPattern(pat, idx, t){
+  for (const id in pat){
+    const v = VEL[pat[id][idx]];
+    if (v) DRUM[id].play(Math.max(ctx.currentTime, t + humanize(id)), v * (.92 + Math.random() * .16));
+  }
+}
 function playDrums(s, t){
   if (s === 0){
+    dbar++;
     if (fillBar){ fillBar = false; hitDrum('crash', .9, t); }   // fim da virada: prato no 1
-    if (grvNext !== undefined){ grv = grvNext; grvNext = undefined; uiAt(t); }
-    if (fillQueued){ fillQueued = false; fillBar = true; uiAt(t); }
+    const G = grv && GROOVES.find(g => g.id === grv);
+    if (G && G.then && dbar >= (G.bars || 1)){ grv = G.then; dbar = 0; hitDrum('crash', 1, t); uiAt(t); }
+    if (grvNext !== undefined){ grv = grvNext; grvNext = undefined; dbar = 0; uiAt(t); }
+    if (fillQueued){ fillQueued = false; fillBar = true; fillPat = pick(FILLS); uiAt(t); }
     if (!drumsBusy() && S.key === null) setTimeout(() => { if (!drumsBusy() && S.key === null) stopClock(); }, 50);
   }
-  const pat = fillBar ? FILL : grv && (GROOVES.find(g => g.id === grv) || {}).p;
-  if (!pat) return;
-  for (const id in pat){
-    const c = pat[id][s];
-    if (c === 'x' || c === 'o') DRUM[id].play(t, (c === 'x' ? 1 : .6) * (.9 + Math.random() * .2));
+  if (fillBar){ playPattern(fillPat, s, t); return; }
+  const G = grv && GROOVES.find(g => g.id === grv);
+  if (!G) return;
+  const bars = G.bars || 1;
+  if (G.trip){   // tercinas: o compasso inteiro é agendado na cabeça do compasso
+    if (s !== 0) return;
+    const bar = stepDur() * 16;
+    for (let i = 0; i < 12; i++) playPattern(G.p, (dbar % bars) * 12 + i, t + i * bar / 12);
+    return;
   }
+  playPattern(G.p, (dbar % bars) * 16 + s, t);
 }
 // Atualiza a tela quando a mudança agendada realmente soar
 const uiAt = t => setTimeout(render, Math.max(0, t - ctx.currentTime) * 1000);
 function ensureClock(){
   initAudio(); if (ctx.state !== 'running') ctx.resume();
-  if (!timer){ startClock(); return true; }
+  if (!timer){ dbar = -1; startClock(); return true; }
   return false;
 }
 function setGroove(id){
@@ -1323,7 +1430,7 @@ function setGroove(id){
   render();
 }
 function queueFill(){
-  if (ensureClock()) fillBar = true; else fillQueued = true;
+  ensureClock(); fillQueued = true;     // a virada ocupa o próximo compasso inteiro
   render();
 }
 function bassNote(t, f, vel, dur){
@@ -1973,11 +2080,13 @@ $('seqVol').addEventListener('input', e => {
 });
 const SLIDERS = ['vol', 'bright', 'rev', 'fade', 'arp', 'fill', 'plucks', 'bpm', 'vari', 'drumVol'];
 // Drum pads: toca no toque (pointerdown) para responder rápido; teclado/leitor de tela usam o click
-$('dpads').innerHTML = DRUMS.map((d, i) => `<button class="dpad" data-drum="${d.id}" data-g="${d.g}"><b>${d.name}</b><small>${i + 1}</small></button>`).join('');
+$('dpads').innerHTML = DRUM_PADS.map((d, i) => `<button class="dpad" data-drum="${d.id}" data-g="${d.g}"><b>${d.name}</b><small>${i + 1}</small></button>`).join('');
 $('dpads').addEventListener('pointerdown', e => { const b = e.target.closest('[data-drum]'); if (b){ e.preventDefault(); hitDrum(b.dataset.drum); } });
 $('dpads').addEventListener('click', e => { const b = e.target.closest('[data-drum]'); if (b && e.detail === 0) hitDrum(b.dataset.drum); });
 function renderGrooves(){
-  $('grooves').innerHTML = GROOVES.map(g => `<button class="groove${grvNext === g.id ? ' pend' : ''}" data-grv="${g.id}" aria-pressed="${grv === g.id}"><b>${g.name}</b><span>${g.desc}</span></button>`).join('');
+  $('grooves').innerHTML = GCATS.map(([c, title]) => `<div class="tgroup"><h3>${title}</h3><div class="ggrid">` +
+    GROOVES.filter(g => g.cat === c).map(g => `<button class="groove${grvNext === g.id ? ' pend' : ''}" data-grv="${g.id}" aria-pressed="${grv === g.id}"><b>${g.name}</b><span>${g.desc}</span></button>`).join('') +
+    '</div></div>').join('');
   $('btnGrvStop').disabled = !drumsBusy();
   $('btnFill').classList.toggle('learning', fillQueued || fillBar);
 }
@@ -2151,7 +2260,7 @@ function onMidi(e){
   // Canal 10 = bateria: toca os drum pads (antes do filtro de canal)
   if (!learn && ch === 10 && (type === 0x90 || type === 0x80) && (M.drums || 'gm') !== 'off'){
     if (type === 0x90 && d2 > 0){
-      const d = M.drums === 'seq' ? DRUMS[d1 - 36] : DRUMS.find(x => x.gm.includes(d1));
+      const d = M.drums === 'seq' ? DRUM_PADS[d1 - 36] : DRUMS.find(x => x.gm.includes(d1));
       if (d) hitDrum(d.id, .35 + .65 * d2 / 127);
     }
     $('midiLed').classList.add('act'); clearTimeout(ledT); ledT = setTimeout(() => $('midiLed').classList.remove('act'), 90);
