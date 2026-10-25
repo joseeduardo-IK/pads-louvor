@@ -2111,7 +2111,10 @@ function chordLine(line){
 }
 const SECTION_RE = /^\s*(intro(?:dução)?|refr[ãa]o|coro|ponte|verso|estrofe|(?:primeira|segunda|terceira|quarta) parte|parte\s*\d*|pr[ée][\s-]?refr[ãa]o|final|solo|interl[úu]dio|chorus|verse|bridge|outro)(?:\s*\d+|\s*\([^)]*\)|\s*\d+\s*x)*\s*:?\s*$/i;
 function analyzeCifra(text){
-  const lines = text.split(/\r?\n/);
+  // Texto copiado de sites vem com caracteres invisíveis, espaços especiais e quebras de linha variadas
+  const lines = text.normalize('NFKC').replace(/[\u200B-\u200D\u2060\uFEFF\u00AD]/g, '')
+                    .replace(/[\u00A0\u2000-\u200A\u202F\u205F\u3000]/g, ' ')
+                    .split(/\r\n|[\r\n\u0085\u2028\u2029\v\f]/);
   const parts = [], seen = {};
   let cur = null, tom = null, title = '', lyric = '', oneLine = null;
   const sec = name => {
