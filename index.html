@@ -282,6 +282,35 @@ dialog{max-height:calc(100vh - 32px);overflow-y:auto}
 .part[aria-pressed="true"]{border-color:var(--candle);background:var(--candle-soft)}
 .part[aria-pressed="true"] b{color:var(--candle)}
 .dlg-actions{display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap}
+/* VS: música inteira */
+.vs-top{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;justify-content:space-between}
+.vs-top .lbl,.vs-sum{font-size:.78rem;color:var(--muted)}
+.vs-bpm{font-family:var(--f-display);font-size:1.15rem;min-width:4.6em;text-align:center}
+.vs-list{display:flex;flex-direction:column;gap:6px}
+.vrow{display:grid;grid-template-columns:1.6em minmax(0,1.3fr) auto minmax(0,1fr) auto;gap:6px 8px;align-items:center;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:6px 8px;transition:border-color .2s,background .2s}
+.vrow .n{font-family:var(--f-mono);font-size:.72rem;color:var(--muted);text-align:center}
+.vrow select{font:inherit;font-size:.84rem;color:var(--fg);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:6px 6px;min-width:0;width:100%}
+.vrow .bars{display:flex;align-items:center;gap:2px}
+.vrow .bars b{font-family:var(--f-mono);font-size:.86rem;min-width:2.2em;text-align:center}
+.vrow .bars button,.vrow .acts button{background:none;border:1px solid var(--line);border-radius:7px;color:var(--muted);width:28px;height:28px;padding:0;font-size:.9rem}
+.vrow .acts{display:flex;gap:3px}
+.vrow .acts .x:hover{color:var(--danger)}
+.vrow .prog{grid-column:2 / -1;height:3px;border-radius:2px;background:var(--line);overflow:hidden;display:none}
+.vrow .prog i{display:block;height:100%;background:var(--candle);width:0;transition:width .3s}
+.vrow.cur{border-color:var(--candle);background:var(--candle-soft)}
+.vrow.cur .prog{display:block}
+.btn-vs{background:var(--candle);border:1px solid var(--candle);color:#1c1405;border-radius:10px;padding:8px 16px;font-weight:700}
+.btn-vs.on{background:none;color:var(--candle)}
+.ear-read{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.ear-read b{font-family:var(--f-display);font-size:2.4rem;line-height:1}
+.ear-read span{font-size:.84rem;color:var(--muted)}
+.ear-meter{height:6px;border-radius:3px;background:var(--line);overflow:hidden}
+.ear-meter i{display:block;height:100%;width:0;background:var(--candle);transition:width .15s}
+@media (max-width:520px){
+  .vrow{grid-template-columns:1.4em minmax(0,1fr) auto}
+  .vrow select[data-vg]{grid-column:2}
+  .vrow .acts{grid-column:3;justify-content:flex-end}
+}
 
 @media (max-width:760px){
   .seq-foot{grid-template-columns:1fr}
@@ -451,6 +480,33 @@ dialog{max-height:calc(100vh - 32px);overflow-y:auto}
     <p class="note">O pad, o shimmer, os toques, a sequência e o baixo acompanham o acorde da vez. Toque num acorde da progressão para pular direto para ele. No modo Manual a troca é só por toque, pelas setas <kbd>↑</kbd> <kbd>↓</kbd> ou por um botão/pedal MIDI. Com o “Acorde do pad” em Maior ou Menor, cada acorde ganha a terça certa (o vi fica menor, por exemplo); em 1 · 5 · 8 ele fica neutro. Os graus seguem a escala escolhida na sequência (Maior/Menor).</p>
   </section>
 
+  <section data-tab="acordes">
+    <div class="sec-head">
+      <h2>VS · música inteira</h2>
+      <button class="btn-vs" id="vsPlay">▶ Tocar VS</button>
+    </div>
+    <div class="seq on" id="vsBox">
+      <div class="vs-top">
+        <div class="tools">
+          <span class="lbl">Andamento</span>
+          <button class="btn" data-bpm="-1" aria-label="Diminuir BPM">−</button>
+          <b class="vs-bpm" id="vsBpm"></b>
+          <button class="btn" data-bpm="1" aria-label="Aumentar BPM">+</button>
+          <button class="btn" id="btnEar">Detectar ouvindo a música…</button>
+        </div>
+        <span class="vs-sum" id="vsSum"></span>
+      </div>
+      <div class="chips" id="vsOpts"></div>
+      <div class="vs-list" id="vsList"></div>
+      <div class="tools">
+        <button class="btn ghost" id="vsAdd">+ Adicionar parte</button>
+        <button class="btn ghost" id="vsAuto">Montar com todas as partes</button>
+        <button class="btn ghost" id="vsClear">Limpar</button>
+      </div>
+    </div>
+    <p class="note">O VS toca a música do começo ao fim: conta 1 compasso de click, depois segue as partes na ordem acima, cada uma pelo número de compassos indicado, trocando o groove da bateria e os acordes sozinho. Com Viradas ligado, o último compasso antes de cada parte nova é uma virada. A Guia falada anuncia a próxima parte um compasso antes (ela sai pela voz do aparelho, então não vai só para o fone). Com “Click no fone” ligado, click fica no lado esquerdo e a música no direito, como num VS de multitrack. Ao detectar uma cifra, a ordem das partes e os compassos são estimados — confira e ajuste antes do culto.</p>
+  </section>
+
   <div class="row2" data-tab="tocar">
     <section>
       <h2>Acorde do pad</h2>
@@ -601,6 +657,24 @@ dialog{max-height:calc(100vh - 32px);overflow-y:auto}
   </div>
 </dialog>
 
+<dialog id="dlgEar">
+  <div class="form">
+    <h3>Detectar andamento</h3>
+    <p class="hint">Toque a música (vídeo do YouTube, Spotify…) e deixe o E-Pads ouvir uns 15 segundos, de preferência numa parte com bateria. No computador, escolha a aba do vídeo e marque “Compartilhar áudio da guia”. No celular, use o microfone com a música no alto-falante.</p>
+    <div class="tools">
+      <button type="button" class="btn" id="earTab">Ouvir uma aba</button>
+      <button type="button" class="btn" id="earMic">Ouvir pelo microfone</button>
+    </div>
+    <div class="ear-meter" aria-hidden="true"><i id="earLevel"></i></div>
+    <div class="ear-read"><b id="earBpm">—</b><span id="earMsg">Escolha de onde ouvir.</span></div>
+    <div class="tools" id="earPick" hidden></div>
+    <div class="dlg-actions">
+      <span></span>
+      <button type="button" class="btn" id="earClose">Fechar</button>
+    </div>
+  </div>
+</dialog>
+
 <dialog id="dlgPaste">
   <div class="form">
     <h3>Colar set list</h3>
@@ -738,7 +812,8 @@ function normSeq(q){
 }
 
 const DEF = {key:null, timbre:'sonho', chord:'n', oct:0, sub:false, vol:80, bright:62, rev:50, fade:30, order:'chrom',
-             arp:55, fill:45, plucks:30, bpm:72, vari:50, seq:SEQ_DEF, prog:null, songId:null, drumVol:75, drumAmb:60};
+             arp:55, fill:45, plucks:30, bpm:72, vari:50, seq:SEQ_DEF, prog:null, songId:null, drumVol:75, drumAmb:60,
+             vs:{click:true, guide:true, fills:true, drums:true, bass:true, split:false}};
 
 // Acordes da música: graus por modo — [nome, semitons acima da tônica, qualidade]
 const PROG_PAL = {
@@ -764,6 +839,9 @@ function normProg(p){
   const idx = v => Math.min(p.parts.length - 1, Math.max(0, Math.round(+v) || 0));
   p.part = idx(p.part); p.startPart = idx(p.startPart);
   p.chords = p.parts[p.part].chords.slice();
+  // VS: ordem das partes na música inteira — {p: parte, bars: compassos, g: groove ('' = sem bateria)}
+  p.arr = (Array.isArray(p.arr) ? p.arr : []).filter(x => x && p.parts[x.p]).slice(0, 40)
+          .map(x => ({p: Math.round(+x.p) || 0, bars: Math.min(64, Math.max(1, Math.round(+x.bars) || 8)), g: typeof x.g === 'string' ? x.g : ''}));
   return p;
 }
 const clone = o => JSON.parse(JSON.stringify(o));
@@ -771,6 +849,7 @@ let S = clone(DEF);
 try { const saved = JSON.parse(localStorage.getItem('pads-louvor') || '{}'); Object.assign(S, saved, {key:null}); } catch(e) {}
 S.seq = normSeq(S.seq);
 S.prog = normProg(S.prog);
+S.vs = {...DEF.vs, ...(S.vs && typeof S.vs === 'object' ? S.vs : {})};
 
 // Set list: cada música guarda o tom e um retrato dos ajustes de som
 const SONG_FIELDS = ['timbre', 'chord', 'oct', 'sub', 'bpm', 'arp', 'fill', 'plucks', 'vari', 'seq', 'prog'];
@@ -788,7 +867,7 @@ function save(){
 
 // ---------- Áudio ----------
 let ctx, bus, tone, dry, wet, conv, master, comp, analyser, waves = {}, noiseBuf;
-let motionOut, arpGain, pluckGain, seqGain, seqBass, dlL, dlR, chorusIn;
+let motionOut, arpGain, pluckGain, seqGain, seqBass, dlL, dlR, chorusIn, musicPan, clickOut, clickPan, vsBassOut;
 let voice = null;
 
 function initAudio(){
@@ -803,7 +882,13 @@ function initAudio(){
   comp.threshold.value = -16; comp.ratio.value = 3; comp.attack.value = .05; comp.release.value = .4;
   analyser = ctx.createAnalyser(); analyser.fftSize = 2048;
   bus.connect(tone); tone.connect(dry); tone.connect(conv); conv.connect(wet);
-  dry.connect(master); wet.connect(master); master.connect(comp); comp.connect(analyser); analyser.connect(ctx.destination);
+  dry.connect(master); wet.connect(master); master.connect(comp); comp.connect(analyser);
+  // VS: música e click/guia podem ir para lados diferentes do fone
+  musicPan = ctx.createStereoPanner ? ctx.createStereoPanner() : ctx.createGain();
+  clickOut = ctx.createGain(); clickPan = ctx.createStereoPanner ? ctx.createStereoPanner() : ctx.createGain();
+  analyser.connect(musicPan); musicPan.connect(ctx.destination);
+  clickOut.connect(clickPan); clickPan.connect(ctx.destination);
+  vsBassOut = ctx.createGain(); vsBassOut.gain.value = .9; vsBassOut.connect(master);
   waves.organ = harmonicWave([0, 1, .85, .55, .6, 0, .35, 0, .3, 0, 0, 0, .15]);
   waves.bell  = harmonicWave([0, 1, .05, .5, 0, .28, 0, .14, 0, .07]);
   waves.flute = harmonicWave([0, 1, .3, .1, .04]);
@@ -895,6 +980,8 @@ function applyMix(instant){
   drumBus.gain.setTargetAtTime(Math.pow(S.drumVol / 100, 1.3) * 1.1, t, k);
   const amb = S.drumAmb / 100;   // ambiência da bateria: sala + reverb longo
   drumRoomOut.gain.setTargetAtTime(.25 + amb * 1.1, t, k); drumRev.gain.setTargetAtTime(.15 + amb * 1.1, t, k);
+  const split = S.vs.split && musicPan.pan;
+  if (musicPan.pan){ musicPan.pan.setTargetAtTime(split ? 1 : 0, t, k); clickPan.pan.setTargetAtTime(split ? -1 : 0, t, k); }
   const dt = Math.min(2.9, 60 / S.bpm * .75);   // colcheia pontuada
   dlL.delayTime.setTargetAtTime(dt, t, .05); dlR.delayTime.setTargetAtTime(dt, t, .05);
 }
@@ -1087,7 +1174,9 @@ function tick(){
 }
 function playStep(s, t){
   playDrums(s, t);
+  if (VS.run && s % 4 === 0 && (VS.count > 0 || S.vs.click)) clickNote(t, s === 0, VS.count > 0);
   if (S.key === null) return;
+  if (VS.run && !VS.count && S.vs.bass) vsBassStep(s, t);
   if (s % 4 === 0) beats.push(t);
   if (S.seq.on){
     const div = S.seq.res === 8 ? 2 : 1;
@@ -1166,6 +1255,7 @@ function changeChord(i, t){
   chordMarks.push([t, j]);
 }
 function onBar(t){
+  if (VS.run && vsBar(t)) return;
   if (pendingPart !== null){ switchPart(pendingPart, t); return; }
   if (!progActive() || !S.prog.bars) return;
   progBar++;
@@ -1726,13 +1816,116 @@ function queueFill(){
   ensureClock(); fillQueued = true;     // a virada ocupa o próximo compasso inteiro
   render();
 }
-function bassNote(t, f, vel, dur){
+
+// ---------- VS: toca a música inteira, parte por parte ----------
+// count = compassos de contagem que faltam; i = item atual de S.prog.arr; bar = compasso dentro do item
+const VS = {run:false, count:0, i:0, bar:0, shown:-1, shownBar:0, marks:[]};
+// Intensidade de cada groove, para o baixo acompanhar: 0 = leve, 1 = médio, 2 = cheio
+const GRV_ENERGY = {coracao:0, aro:0, ternario:0, shaker:0, pulso:1, tons:1, tribal:1, meio:1, xote:1, baiao:1, cresc:2, hino:2, pop:2, colcheias:2, gospel:2};
+// Groove sugerido pelo nome da parte (a balada lenta pede grooves mais leves)
+function autoGroove(name, bpm){
+  const n = name.toLowerCase(), slow = bpm < 88;
+  if (/intro|final|outro|fim/.test(n)) return 'coracao';
+  if (/pr[ée][\s-]?refr|pr[ée][\s-]?coro|pre-?chorus/.test(n)) return 'pulso';
+  if (/refr|coro|chorus/.test(n)) return slow ? 'hino' : 'colcheias';
+  if (/ponte|bridge/.test(n)) return 'tons';
+  if (/solo|interl/.test(n)) return slow ? 'hino' : 'pop';
+  return slow ? 'aro' : 'pop';
+}
+const vsName = i => { const it = S.prog.arr[i], pt = it && S.prog.parts[it.p]; return pt ? pt.name : ''; };
+function clickNote(t, accent, loud){
+  const g = ctx.createGain(), o = ctx.createOscillator();
+  o.frequency.value = accent ? 1760 : 1180;
+  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(loud ? .55 : .38, t + .002);
+  g.gain.exponentialRampToValueAtTime(.001, t + .06);
+  o.connect(g); g.connect(clickOut); o.start(t); o.stop(t + .08);
+  setTimeout(() => { try { g.disconnect(); } catch(e) {} }, (t - ctx.currentTime + .3) * 1000);
+}
+function vsBassStep(s, t){
+  const it = S.prog.arr[VS.i]; if (!it) return;
+  const e = S.vs.drums && it.g ? (GRV_ENERGY[it.g] ?? 1) : 0;
+  const hits = e === 2 ? [0, 4, 8, 12] : e === 1 ? [0, 8, 14] : [0];
+  if (!hits.includes(s)) return;
+  const pc = curChord(), dur = stepDur() * (e === 0 ? 14 : e === 1 ? 6 : 3.5);
+  bassNote(t, mtof(36 + S.key + chordOff(pc)), s === 0 ? 1 : .75, dur, vsBassOut);
+}
+// Guia falada: anuncia a parte na hora `t` (a voz do aparelho não passa pelo Web Audio)
+function speakAt(text, t){
+  if (!S.vs.guide || !('speechSynthesis' in window) || !text) return;
+  const say = text.replace(/\s+\d+$/, '').replace(/^parte sem nome$/i, 'Parte');
+  setTimeout(() => {
+    if (!VS.run) return;
+    const u = new SpeechSynthesisUtterance(say);
+    u.lang = 'pt-BR'; u.rate = 1.15; u.volume = 1;
+    const v = speechSynthesis.getVoices().find(x => /^pt[-_]BR/i.test(x.lang)); if (v) u.voice = v;
+    speechSynthesis.cancel(); speechSynthesis.speak(u);
+  }, Math.max(0, (t - ctx.currentTime) * 1000));
+}
+function vsEnter(i, t){
+  const it = S.prog.arr[i];
+  VS.i = i; VS.bar = 0;
+  switchPart(it.p, t);
+  if (S.vs.drums){ if ((it.g || null) !== grv) grvNext = it.g || null; }
+  else if (grv) grvNext = null;
+  VS.marks.push([t, i]);
+  if (it.bars === 1) vsPrepare(i + 1, t);
+}
+// Último compasso da parte: anuncia a próxima e, se for o caso, faz a virada
+function vsPrepare(j, t){
+  const arr = S.prog.arr;
+  if (j >= arr.length){ speakAt('Final', t); return; }
+  speakAt(vsName(j), t);
+  if (S.vs.fills && S.vs.drums && (arr[VS.i].g || grv) && arr[j].g) fillQueued = true;
+}
+function vsBar(t){
+  const arr = S.prog.arr;
+  if (VS.count > 0){
+    VS.count--;
+    if (!VS.count) vsEnter(0, t);
+    return true;
+  }
+  const it = arr[VS.i];
+  if (!it){ vsEnd(t); return true; }
+  VS.bar++; VS.marks.push([t, VS.i, VS.bar]);
+  if (VS.bar >= it.bars){
+    if (VS.i + 1 >= arr.length){ vsEnd(t); return true; }
+    vsEnter(VS.i + 1, t); return true;
+  }
+  if (VS.bar === it.bars - 1) vsPrepare(VS.i + 1, t);
+  return false;   // dentro da parte, os acordes seguem a troca normal
+}
+// Fim da música: prato no 1, bateria para e o pad some no fade escolhido
+function vsEnd(t){
+  if (S.vs.drums && grv) hitDrum('crash', 1, t);
+  grvNext = null; VS.run = false; VS.marks.push([t, -1]);
+  setTimeout(() => { if (S.key !== null && !VS.run) stop(fadeSec()); render(); }, Math.max(0, (t - ctx.currentTime) * 1000));
+}
+function vsHalt(){
+  VS.run = false; VS.count = 0; VS.marks = []; VS.shown = -1;
+  grv = null; grvNext = undefined; fillQueued = false; fillBar = false;
+  if ('speechSynthesis' in window) speechSynthesis.cancel();
+}
+function vsStart(){
+  const arr = S.prog.arr; if (!arr.length) return;
+  const song = curSong(), key = S.key !== null ? S.key : (song ? song.key : 0);
+  initAudio(); if (ctx.state !== 'running') ctx.resume();
+  if (S.key !== null) stop(.08);
+  vsHalt(); stopClock();
+  S.prog.on = true; switchPart(arr[0].p);
+  VS.run = true; VS.count = 1; VS.i = 0; VS.bar = 0; VS.shown = -1;
+  if ('speechSynthesis' in window) speechSynthesis.getVoices();
+  start(key, 2.5);
+  dbar = -1;
+  speakAt(vsName(0), ctx.currentTime + .1);
+  render();
+}
+function bassNote(t, f, vel, dur, dest = seqBass){
   const len = Math.max(.25, dur * 1.8);
   const g = ctx.createGain(); g.gain.setValueAtTime(0, t);
   g.gain.linearRampToValueAtTime(.38 * vel, t + .01); g.gain.exponentialRampToValueAtTime(.001, t + len);
   const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = f;
   const o2 = ctx.createOscillator(), g2 = ctx.createGain(); o2.type = 'triangle'; o2.frequency.value = f * 2; g2.gain.value = .12;
-  o.connect(g); o2.connect(g2); g2.connect(g); g.connect(seqBass);
+  o.connect(g); o2.connect(g2); g2.connect(g); g.connect(dest);
   [o, o2].forEach(x => { x.start(t); x.stop(t + len + .05); });
   setTimeout(() => { try { g.disconnect(); g2.disconnect(); } catch(e) {} }, (t - ctx.currentTime + len + .3) * 1000);
 }
@@ -1780,6 +1973,7 @@ function start(key, sec, keepProg){
   keepAwake(); render();
 }
 function stop(sec){
+  if (VS.run) vsHalt();
   killFading(sec);
   if (voice) voice.fadeOut(sec);
   chordMarks = []; shownIdx = -1; pendingPart = null; shownPart = S.prog.part;
@@ -1852,6 +2046,7 @@ function render(){
   renderSet();
   renderSeq();
   renderProg();
+  renderVS();
   renderGrooves();
   syncDots();
 }
@@ -1897,7 +2092,9 @@ $('btnPartRen').onclick = () => {
 $('btnPartDel').onclick = () => {
   const p = S.prog; if (p.parts.length < 2) return;
   if (!confirm(`Excluir a parte “${p.parts[p.part].name}”?`)) return;
-  p.parts.splice(p.part, 1);
+  const del = p.part;
+  p.parts.splice(del, 1);
+  p.arr = p.arr.filter(x => x.p !== del).map(x => ({...x, p: x.p > del ? x.p - 1 : x.p}));
   if (p.startPart >= p.parts.length) p.startPart = 0;
   switchPart(Math.min(p.part, p.parts.length - 1), S.key !== null ? ctx.currentTime + .02 : undefined);
 };
@@ -1956,6 +2153,213 @@ $('progBox').addEventListener('click', e => {
   if (b){ S.prog.bars = +b.dataset.v; progBar = 0; save(); renderProg(); }
 });
 
+// ---------- VS (interface) ----------
+const VS_OPTS = [['click', 'Click'], ['guide', 'Guia falada'], ['fills', 'Viradas'], ['drums', 'Bateria'], ['bass', 'Baixo'], ['split', 'Click no fone (L) · música (R)']];
+const fmtDur = sec => Math.floor(sec / 60) + ':' + String(Math.round(sec % 60)).padStart(2, '0');
+function renderVS(){
+  const p = S.prog, arr = p.arr;
+  $('vsBpm').textContent = S.bpm + ' BPM';
+  $('vsOpts').innerHTML = VS_OPTS.map(([id, n]) => `<button class="chip" data-vso="${id}" aria-pressed="${!!S.vs[id]}">${n}</button>`).join('');
+  const grvOpts = sel => `<option value=""${sel ? '' : ' selected'}>Sem bateria</option>` +
+    GCATS.map(([c, t]) => `<optgroup label="${t}">` + GROOVES.filter(g => g.cat === c).map(g => `<option value="${g.id}"${g.id === sel ? ' selected' : ''}>${g.name}</option>`).join('') + '</optgroup>').join('');
+  const cur = VS.run || VS.shown >= 0 ? VS.shown : -1;
+  $('vsList').innerHTML = arr.length ? arr.map((it, i) => `<div class="vrow${i === cur ? ' cur' : ''}" data-vi="${i}">
+      <span class="n">${i + 1}</span>
+      <select data-vp="${i}" aria-label="Parte ${i + 1}">${p.parts.map((pt, j) => `<option value="${j}"${j === it.p ? ' selected' : ''}>${esc(pt.name)}</option>`).join('')}</select>
+      <span class="bars"><button data-vb="${i}" data-d="-1" aria-label="Menos compassos">−</button><b title="compassos">${it.bars}</b><button data-vb="${i}" data-d="1" aria-label="Mais compassos">+</button></span>
+      <select data-vg="${i}" aria-label="Bateria da parte ${i + 1}">${grvOpts(it.g)}</select>
+      <span class="acts"><button data-vup="${i}" aria-label="Subir"${i ? '' : ' disabled'}>↑</button><button class="x" data-vdel="${i}" aria-label="Remover">×</button></span>
+      <span class="prog"><i></i></span>
+    </div>`).join('')
+    : '<span class="prog-empty">Nenhuma parte no VS. Detecte de uma cifra ou toque em “Montar com todas as partes”.</span>';
+  const bars = arr.reduce((a, x) => a + x.bars, 0);
+  $('vsSum').textContent = arr.length ? `${arr.length} partes · ${bars} compassos · ${fmtDur(bars * 4 * 60 / S.bpm)}` : '';
+  $('vsPlay').textContent = VS.run ? '■ Parar VS' : '▶ Tocar VS';
+  $('vsPlay').classList.toggle('on', VS.run);
+  $('vsPlay').disabled = !arr.length;
+  showVSBar();
+}
+function showVSBar(){
+  const row = document.querySelector('#vsList .vrow.cur i'), it = S.prog.arr[VS.shown];
+  if (row && it) row.style.width = Math.min(100, (VS.shownBar + 1) / it.bars * 100) + '%';
+}
+const vsEdit = () => { save(); renderVS(); };
+$('vsPlay').onclick = () => { if (VS.run) stop(fadeSec()); else vsStart(); };
+$('vsBox').addEventListener('click', e => {
+  const o = e.target.closest('[data-vso]');
+  if (o){ const id = o.dataset.vso; S.vs[id] = !S.vs[id]; applyMix(false); vsEdit(); return; }
+  const bp = e.target.closest('[data-bpm]');
+  if (bp){ S.bpm = Math.max(50, Math.min(160, S.bpm + +bp.dataset.bpm)); applyMix(false); save(); render(); return; }
+  const arr = S.prog.arr;
+  const b = e.target.closest('[data-vb]');
+  if (b){ const it = arr[+b.dataset.vb]; it.bars = Math.max(1, Math.min(64, it.bars + +b.dataset.d)); vsEdit(); return; }
+  const up = e.target.closest('[data-vup]');
+  if (up){ const i = +up.dataset.vup; if (i > 0 && !VS.run){ [arr[i - 1], arr[i]] = [arr[i], arr[i - 1]]; vsEdit(); } return; }
+  const del = e.target.closest('[data-vdel]');
+  if (del){ if (VS.run) return; arr.splice(+del.dataset.vdel, 1); vsEdit(); }
+});
+$('vsBox').addEventListener('change', e => {
+  const t = e.target, arr = S.prog.arr;
+  if (t.dataset.vp !== undefined) arr[+t.dataset.vp].p = +t.value;
+  else if (t.dataset.vg !== undefined) arr[+t.dataset.vg].g = t.value;
+  else return;
+  vsEdit();
+});
+$('vsAdd').onclick = () => {
+  const p = S.prog; if (p.arr.length >= 40) return;
+  const j = p.arr.length ? p.arr[p.arr.length - 1].p : p.part;
+  p.arr.push({p: j, bars: 8, g: autoGroove(p.parts[j].name, S.bpm)}); vsEdit();
+};
+$('vsAuto').onclick = () => {
+  const p = S.prog;
+  if (p.arr.length && !confirm('Substituir a ordem atual do VS por todas as partes, uma vez cada?')) return;
+  p.arr = p.parts.map((pt, j) => ({p: j, bars: 8, g: autoGroove(pt.name, S.bpm)})); vsEdit();
+};
+$('vsClear').onclick = () => { if (S.prog.arr.length && !VS.run && confirm('Limpar a ordem do VS?')){ S.prog.arr = []; vsEdit(); } };
+
+// ---------- Detectar andamento ouvindo a música ----------
+// Fluxo espectral (FFT de 1024, salto de 512) e autocorrelação com pente nos múltiplos do pulso
+class BpmEar {
+  constructor(sr){
+    this.sr = sr; this.N = 1024; this.hop = 512; this.buf = new Float32Array(this.N); this.fill = 0;
+    this.prev = new Float32Array(this.N / 2); this.env = []; this.fr = sr / this.hop;
+    this.win = Float32Array.from({length: this.N}, (_, i) => .5 - .5 * Math.cos(2 * Math.PI * i / this.N));
+    this.re = new Float32Array(this.N); this.im = new Float32Array(this.N);
+  }
+  push(x){
+    for (let i = 0; i < x.length; i++){
+      this.buf[this.fill++] = x[i];
+      if (this.fill === this.N){ this.frame(); this.buf.copyWithin(0, this.hop); this.fill = this.N - this.hop; }
+    }
+  }
+  frame(){
+    const {N, re, im, win, prev} = this;
+    for (let i = 0; i < N; i++){ re[i] = this.buf[i] * win[i]; im[i] = 0; }
+    fft(re, im);
+    let flux = 0;
+    const hi = Math.min(N / 2, Math.round(8000 / this.sr * N));
+    for (let k = 1; k < hi; k++){
+      const m = Math.log1p(1000 * Math.hypot(re[k], im[k]));
+      const d = m - prev[k]; if (d > 0) flux += d; prev[k] = m;
+    }
+    this.env.push(flux);
+    if (this.env.length > this.fr * 30) this.env.shift();   // só os últimos 30 s
+  }
+  seconds(){ return this.env.length / this.fr; }
+  tempo(lo = 50, hi = 180){
+    const fr = this.fr, e = this.env, n = e.length;
+    if (n < fr * 6) return null;
+    // tira a média móvel (~0,5 s) e fica só com os ataques
+    const w = Math.round(fr * .25), o = new Float32Array(n), pre = [0];
+    for (let i = 0; i < n; i++) pre.push(pre[i] + e[i]);
+    for (let i = 0; i < n; i++){ const a = Math.max(0, i - w), b = Math.min(n, i + w + 1); o[i] = Math.max(0, e[i] - (pre[b] - pre[a]) / (b - a)); }
+    const lagMin = Math.floor(60 * fr / hi), lagMax = Math.ceil(60 * fr / lo);
+    const acf = new Float32Array(lagMax * 2 + 2);
+    for (let L = 1; L < acf.length && L < n; L++){ let s = 0; for (let i = L; i < n; i++) s += o[i] * o[i - L]; acf[L] = s / (n - L); }
+    const at = x => { const i = Math.floor(x), f = x - i; return (acf[i] || 0) * (1 - f) + (acf[i + 1] || 0) * f; };
+    let best = null, sum = 0, cnt = 0;
+    for (let L = lagMin; L <= lagMax; L++){
+      const bpm = 60 * fr / L;
+      const pref = Math.exp(-.5 * Math.pow(Math.log2(bpm / 95) / .9, 2));   // leve preferência por 70–130
+      const sc = (at(L) + .4 * at(2 * L) + .3 * at(L / 2)) * (.6 + .4 * pref);
+      sum += sc; cnt++;
+      if (!best || sc > best.sc) best = {L, sc};
+    }
+    const L = best.L, a = at(L - 1), b = at(L), c = at(L + 1), den = a - 2 * b + c;
+    const dL = den < 0 ? Math.max(-.5, Math.min(.5, .5 * (a - c) / den)) : 0;
+    return {bpm: 60 * fr / (L + dL), conf: Math.min(1, (best.sc / (sum / cnt || 1) - 1) / 2)};
+  }
+}
+function fft(re, im){
+  const n = re.length;
+  for (let i = 1, j = 0; i < n; i++){
+    let bit = n >> 1; for (; j & bit; bit >>= 1) j ^= bit; j ^= bit;
+    if (i < j){ [re[i], re[j]] = [re[j], re[i]]; [im[i], im[j]] = [im[j], im[i]]; }
+  }
+  for (let len = 2; len <= n; len <<= 1){
+    const ang = -2 * Math.PI / len, wr = Math.cos(ang), wi = Math.sin(ang);
+    for (let i = 0; i < n; i += len){
+      let cr = 1, ci = 0;
+      for (let k = 0; k < len / 2; k++){
+        const a = i + k, b = a + len / 2;
+        const tr = re[b] * cr - im[b] * ci, ti = re[b] * ci + im[b] * cr;
+        re[b] = re[a] - tr; im[b] = im[a] - ti; re[a] += tr; im[a] += ti;
+        const nr = cr * wr - ci * wi; ci = cr * wi + ci * wr; cr = nr;
+      }
+    }
+  }
+}
+let ear = null;   // {stream, src, proc, mute, det, timer, hist}
+function earStop(){
+  if (!ear) return;
+  clearInterval(ear.timer);
+  try { ear.src.disconnect(); ear.proc.disconnect(); ear.mute.disconnect(); } catch(e) {}
+  ear.stream.getTracks().forEach(t => t.stop());
+  ear = null; $('earLevel').style.width = '0';
+}
+async function earStart(kind){
+  earStop();
+  initAudio(); if (ctx.state !== 'running') ctx.resume();
+  $('earPick').hidden = true; $('earBpm').textContent = '—';
+  let stream;
+  try {
+    if (kind === 'tab'){
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) throw new Error('nodisplay');
+      stream = await navigator.mediaDevices.getDisplayMedia({video: true, audio: true, preferCurrentTab: false, selfBrowserSurface: 'exclude', systemAudio: 'include'});
+      stream.getVideoTracks().forEach(t => t.stop());
+      if (!stream.getAudioTracks().length) throw new Error('noaudio');
+    } else {
+      stream = await navigator.mediaDevices.getUserMedia({audio: {echoCancellation: false, noiseSuppression: false, autoGainControl: false}});
+    }
+  } catch(e){
+    $('earMsg').textContent = e.message === 'noaudio' ? 'Sem áudio: ao escolher a aba, marque “Compartilhar áudio da guia”.'
+      : e.message === 'nodisplay' ? 'Este aparelho não deixa ouvir outra aba. Use o microfone.'
+      : 'Não foi possível ouvir. Verifique a permissão e tente de novo.';
+    return;
+  }
+  const src = ctx.createMediaStreamSource(stream), proc = ctx.createScriptProcessor(2048, 1, 1), mute = ctx.createGain();
+  mute.gain.value = 0;   // o processador precisa estar ligado à saída, mas sem som (evita eco)
+  const det = new BpmEar(ctx.sampleRate);
+  let peak = 0;
+  proc.onaudioprocess = ev => {
+    const x = ev.inputBuffer.getChannelData(0); det.push(x);
+    let m = 0; for (let i = 0; i < x.length; i += 8) m = Math.max(m, Math.abs(x[i])); peak = Math.max(peak * .85, m);
+  };
+  src.connect(proc); proc.connect(mute); mute.connect(ctx.destination);
+  ear = {stream, src, proc, mute, det, hist: []};
+  stream.getAudioTracks()[0].addEventListener('ended', () => { if (ear && ear.stream === stream){ earStop(); $('earMsg').textContent = 'Parou de ouvir.'; } });
+  $('earMsg').textContent = 'Ouvindo… deixe a música tocar.';
+  ear.timer = setInterval(() => {
+    $('earLevel').style.width = Math.min(100, peak * 140) + '%';
+    const s = det.seconds();
+    if (s < 6){ $('earMsg').textContent = peak < .01 ? 'Não estou ouvindo nada ainda…' : `Ouvindo… ${Math.ceil(6 - s)} s`; return; }
+    const r = det.tempo(); if (!r) return;
+    ear.hist.push(r.bpm); if (ear.hist.length > 5) ear.hist.shift();
+    const h = ear.hist, stable = h.length >= 3 && Math.max(...h) - Math.min(...h) < 2;
+    const bpm = Math.round(h.slice().sort((a, b) => a - b)[h.length >> 1]);
+    $('earBpm').textContent = bpm;
+    $('earMsg').textContent = stable ? 'Andamento firme. Pode usar.' : 'Ainda conferindo…';
+    const opt = v => v >= 50 && v <= 160;
+    $('earPick').hidden = false;
+    $('earPick').innerHTML = [[Math.round(bpm / 2), '½'], [bpm, 'Usar'], [bpm * 2, '×2']].filter(([v]) => opt(v))
+      .map(([v, l]) => `<button type="button" class="btn${l === 'Usar' ? ' primary' : ''}" data-ear="${v}">${l} ${v} BPM</button>`).join('');
+  }, 700);
+}
+$('btnEar').onclick = () => {
+  $('earMsg').textContent = 'Escolha de onde ouvir.'; $('earBpm').textContent = '—'; $('earPick').hidden = true;
+  $('earTab').hidden = !(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia);
+  $('dlgEar').showModal();
+};
+$('earTab').onclick = () => earStart('tab');
+$('earMic').onclick = () => earStart('mic');
+$('earPick').addEventListener('click', e => {
+  const b = e.target.closest('[data-ear]'); if (!b) return;
+  S.bpm = Math.max(50, Math.min(160, +b.dataset.ear)); applyMix(false); save(); render();
+  earStop(); $('dlgEar').close();
+});
+$('earClose').onclick = () => $('dlgEar').close();
+$('dlgEar').addEventListener('close', earStop);
+
 // ---------- Set list ----------
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[c]));
 const keyLabel = s => NOTES[s.key].l + (s.mode === 'min' ? 'm' : '');
@@ -2009,6 +2413,7 @@ function playSong(id, force){
   const song = SET.find(s => s.id === id); if (!song) return;
   if (!force && S.songId === id && S.key !== null){ stop(fadeSec()); return; }
   sanitize(song);
+  if (VS.run) vsHalt();
   S.songId = id;
   for (const f of SONG_FIELDS) S[f] = clone(song[f]);
   S.prog.part = S.prog.startPart; S.prog.chords = S.prog.parts[S.prog.part].chords.slice();
@@ -2059,7 +2464,7 @@ function openSong(id, withCifra){
 }
 // Com a cifra analisada, a música recebe a progressão escolhida e o pad passa a ter terça
 function applyDetected(s, det){
-  s.prog = normProg({on:true, bars: s.prog ? s.prog.bars : 2, parts: det.parts, part: det.start, startPart: det.start});
+  s.prog = normProg({on:true, bars: s.prog ? s.prog.bars : 2, parts: det.parts, part: det.start, startPart: det.start, arr: det.arr});
   if (s.chord === 'n') s.chord = s.mode === 'min' ? 'min' : 'maj';
 }
 $('songForm').addEventListener('submit', e => {
@@ -2117,6 +2522,7 @@ function analyzeCifra(text){
                     .split(/\r\n|[\r\n\u0085\u2028\u2029\v\f]/);
   const parts = [], seen = {};
   let cur = null, tom = null, title = '', lyric = '', oneLine = null;
+  const add = (p, cs) => { p.chords.push(...cs); p.lines = (p.lines || 0) + 1; };   // conta as linhas para estimar compassos
   const sec = name => {
     const k = name.toLowerCase().trim();
     // Repetição de uma parte já vista: só vira parte nova se trouxer acordes diferentes
@@ -2129,26 +2535,26 @@ function analyzeCifra(text){
     if (!line.trim()){ oneLine = null; continue; }
     if (oneLine){   // continuação de "[Solo] A B E" na linha de baixo
       const cs = chordLine(line);
-      if (cs){ oneLine.chords.push(...cs); continue; }
+      if (cs){ add(oneLine, cs); continue; }
       oneLine = null;
     }
     const tm = line.match(/\b[Tt]om\s*:\s*([A-G])([#b]?)(m?)(?![a-z])/);
     if (tm && !tom) { tom = {pc: (LETTER[tm[1]] + (tm[2] === '#' ? 1 : tm[2] === 'b' ? -1 : 0) + 12) % 12, mode: tm[3] ? 'min' : 'maj'}; continue; }
     // Acordes no meio da letra: "[C]Senhor eu [G]venho"
     const inl = [...line.matchAll(/\[([^\]]+)\]/g)].map(x => parseChordTok(x[1].trim()));
-    if (inl.length && inl.every(Boolean)){ if (!cur) sec('Parte sem nome'); cur.chords.push(...inl); continue; }
+    if (inl.length && inl.every(Boolean)){ if (!cur) sec('Parte sem nome'); add(cur, inl); continue; }
     const br = line.match(/^\s*\[([^\]]+)\]/);
     if (br){
       sec(br[1]);
       const rest = line.slice(line.indexOf(']') + 1), cs = rest.trim() && chordLine(rest);
-      if (cs){ cur.chords.push(...cs); if (/intro|final|solo|interl/i.test(br[1])){ oneLine = cur; cur = null; } }   // parte de uma linha só
+      if (cs){ add(cur, cs); if (/intro|final|solo|interl/i.test(br[1])){ cur.one = true; oneLine = cur; cur = null; } }   // parte de uma linha só
       continue;
     }
     const cs = chordLine(line);
-    if (cs){ if (!cur) sec('Parte sem nome'); cur.chords.push(...cs); continue; }
+    if (cs){ if (!cur) sec('Parte sem nome'); add(cur, cs); continue; }
     if (SECTION_RE.test(line)){ sec(line.replace(/:\s*$/, '')); continue; }
     const lm = line.match(/^\s*([^:]{3,30}):\s*(.+)$/);   // "Intro: G D Em C"
-    if (lm && SECTION_RE.test(lm[1]) && chordLine(lm[2])){ sec(lm[1]); cur.chords.push(...chordLine(lm[2])); cur = null; continue; }
+    if (lm && SECTION_RE.test(lm[1]) && chordLine(lm[2])){ sec(lm[1]); add(cur, chordLine(lm[2])); cur.one = true; cur = null; continue; }
     if (!title && !cur && line.trim().length < 70) title = line.trim();
     else if (!lyric && cur) lyric = line.trim().replace(/[,.;:!?]+$/, '');   // sem título, a 1ª linha da letra vira o nome
   }
@@ -2162,7 +2568,15 @@ function analyzeCifra(text){
   const all = parts.filter(p => !p.skip).flatMap(p => p.chords);
   if (!all.length) return null;
   const key = tom ? {...tom, from:'tom'} : {...detectKey(all), from:'acordes'};
-  return {key, parts: parts.filter(p => !p.skip && p.chords.length), title: title || lyric};
+  const kept = parts.filter(p => !p.skip && p.chords.length);
+  // Ordem completa da música para o VS: cada vez que uma parte aparece, com os compassos estimados
+  // (linha de acordes sob a letra ≈ 2 compassos; parte de uma linha só, como a intro ≈ 1 por acorde)
+  const order = parts.filter(p => p.chords.length).map(p => {
+    const ref = p.skip && p.dupOf ? p.dupOf : p;
+    const bars = p.one ? p.chords.length : (p.lines || 1) * 2;
+    return {ref, bars: Math.min(64, Math.max(1, bars))};
+  }).filter(o => kept.includes(o.ref));
+  return {key, parts: kept, order, title: title || lyric};
 }
 // Pontua as 24 tonalidades: acordes do campo harmônico somam, os de fora tiram; primeiro e último acorde pesam
 function detectKey(all){
@@ -2215,14 +2629,18 @@ function bestPart(parts){
 }
 function cifraChords(){
   if (!cifra) return null;
-  const k = +$('fKey').value, mode = $('fMode').value, parts = [];
+  const k = +$('fKey').value, mode = $('fMode').value, parts = [], idx = new Map();
   let start = 0;
   cifra.parts.forEach((p, i) => {
-    const pr = partProg(p, k, mode); if (!pr.chords.length) return;
+    const pr = partProg(p, k, mode); if (!pr.chords.length || parts.length >= 12) return;
     if (i === cifraPart) start = parts.length;
+    idx.set(p, parts.length);
     parts.push({name: p.name, chords: pr.chords});
   });
-  return parts.length ? {parts: parts.slice(0, 12), start: Math.min(start, 11)} : null;
+  const bpm = +$('fBpm').value || S.bpm;
+  const arr = cifra.order.filter(o => idx.has(o.ref)).slice(0, 40)
+                .map(o => ({p: idx.get(o.ref), bars: o.bars, g: autoGroove(o.ref.name, bpm)}));
+  return parts.length ? {parts, start, arr} : null;
 }
 function renderCifra(){
   const box = $('cifraResult');
@@ -2243,6 +2661,7 @@ function renderCifra(){
     <p>Partes encontradas (todas vão para a música; escolha por onde ela começa):</p>
     <div class="parts">${rows}</div>
     ${ignored.size ? `<p class="hint">Acordes fora do tom, ignorados: ${esc([...ignored].join(', '))}</p>` : ''}
+    ${cifra.order.length ? `<p class="hint">Ordem para o VS: ${esc(cifra.order.map(o => `${o.ref.name} (${o.bars})`).join(' → '))} compassos. Dá para ajustar depois na aba Acordes.</p>` : ''}
     <p class="hint">Ao salvar, a música recebe o tom e as partes, e o pad passa para Maior/Menor para os acordes terem terça. Ao vivo, troque de parte pelos botões do painel.</p>
   </div>`;
 }
@@ -2567,6 +2986,13 @@ function draw(){
       shownIdx = ci[1];
       if (ci[2] !== undefined){ shownPart = ci[2]; renderProg(); }
       showChord();
+    }
+    let vm = null;
+    while (VS.marks.length && VS.marks[0][0] <= ctx.currentTime) vm = VS.marks.shift();
+    if (vm){
+      const changed = vm[1] !== VS.shown;
+      VS.shown = vm[1]; VS.shownBar = vm[2] || 0;
+      if (changed) renderVS(); else showVSBar();
     }
   }
   requestAnimationFrame(draw);
