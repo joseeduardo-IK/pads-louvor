@@ -103,7 +103,9 @@ input[type=range]{width:100%;accent-color:var(--candle);height:28px}
 .note{color:var(--muted);font-size:.8rem;max-width:70ch}
 
 /* Movimento */
-.motion{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.motion{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.mcard .seg{align-self:flex-start;flex-wrap:wrap}
+.mcard .seg button{font-size:.76rem;padding:5px 9px}
 .mcard{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:6px;min-width:0;transition:border-color .25s,background .25s}
 .mcard.on{border-color:rgba(243,184,92,.5);background:linear-gradient(180deg,var(--candle-soft),transparent 70%),var(--surface)}
 .mcard h3{margin:0;font-size:.98rem;font-weight:600;display:flex;justify-content:space-between;gap:8px}
@@ -416,6 +418,12 @@ dialog{max-height:calc(100vh - 32px);overflow-y:auto}
         <p>Notas brilhantes do acorde em ritmo, com delay pontuado. O padrão muda sozinho a cada compasso.</p>
         <input type="range" id="arp" min="0" max="100" value="55">
       </div>
+      <div class="mcard" id="cardShim">
+        <h3><label for="shim">Shimmer</label><output id="shimOut"></output></h3>
+        <p>Reverb com uma oitava acima realimentando: a cauda do pad sobe e brilha sozinha, como nos pads de worship.</p>
+        <input type="range" id="shim" min="0" max="100" value="45">
+        <div class="seg" role="group" aria-label="Notas do shimmer" id="shimMode"></div>
+      </div>
       <div class="mcard" id="cardFill">
         <h3><label for="fill">Preenchimento</label><output id="fillOut"></output></h3>
         <p>Camada larga uma oitava acima e um “ar” suave que respira e enche o ambiente.</p>
@@ -717,22 +725,22 @@ const OCTS = [{id:-1,name:'Grave'},{id:0,name:'Média'},{id:1,name:'Aguda'},{id:
 // Cada timbre é sintetizado na hora: camadas de osciladores, filtro, LFOs e envio de reverb.
 const TIMBRES = [
   {id:'quente', name:'Quente', desc:'Pad de synth macio', cutoff:1300, q:.7, lfo:[.07,450], level:.95,
-    layers:[{type:'sawtooth', det:[-9,0,9], gain:.2}, {type:'sine', oct:-1, gain:.3, rootOnly:true}]},
+    layers:[{type:'sawtooth', sup:16, gain:.19}, {type:'sine', oct:-1, gain:.3, rootOnly:true}]},
   {id:'cordas', name:'Cordas', desc:'Naipe de cordas lento', cutoff:2600, q:.5, lfo:[.11,700], vib:[5.2,7], level:.85,
     layers:[{type:'sawtooth', det:[-16,-6,6,16], gain:.17}]},
   {id:'coral', name:'Coral', desc:'Vozes em “aah”', cutoff:4200, q:.4, vib:[4.6,11], formant:true, send:.6, chorus:.5, level:1.7,
     layers:[{type:'sawtooth', det:[-14,-6,6,14], gain:.35}]},
   {id:'sonho', name:'Sonho', desc:'Pad quente + reverb shimmer subindo', cutoff:1700, q:.5, fenv:[450,4], lfo:[.06,300], chorus:.7,
-    shimmerVerb:{level:.22, swell:6}, level:.9,
-    layers:[{type:'sawtooth', det:[-10,0,10], gain:.17}, {type:'sine', oct:-1, gain:.25, rootOnly:true}]},
+    shim:.9, level:.9,
+    layers:[{type:'sawtooth', sup:18, gain:.16}, {type:'sine', oct:-1, gain:.25, rootOnly:true}]},
   {id:'escuro', name:'Atmosfera Escura', desc:'Oitava abaixo, chorus e reverb', cutoff:900, q:.6, lfo:[.04,250], chorus:.8, send:.5, level:.95,
     layers:[{type:'sawtooth', det:[-12,12], gain:.15}, {type:'triangle', oct:-1, det:[-6,6], gain:.26}]},
   {id:'analogico', name:'Analógico', desc:'Estilo OB, filtro abrindo devagar', cutoff:2400, q:1.2, fenv:[350,5], lfo:[.08,400], chorus:.9, level:.9,
     layers:[{type:'sawtooth', det:[-7,7], gain:.18}, {type:'square', gain:.07}]},
   {id:'evolutivo', name:'Evolutivo', desc:'Movimento que nunca se repete', cutoff:1400, q:2.5, evolve:[.09,700], send:.45, chorus:.5,
-    shimmerVerb:{level:.1, swell:9}, level:.95,
+    shim:.5, level:.95,
     layers:[{type:'sawtooth', det:[-9,9], gain:.15}, {type:'triangle', oct:1, gain:.1}]},
-  {id:'shimmer', name:'Shimmer', desc:'Etéreo, com oitavas acima', cutoff:7500, q:.3, trem:[.17,.22], send:.9, shimmerVerb:{level:.12, swell:5}, level:.9,
+  {id:'shimmer', name:'Shimmer', desc:'Etéreo, com oitavas acima', cutoff:7500, q:.3, trem:[.17,.22], send:.9, shim:1, level:.75,
     layers:[{type:'triangle', det:[-6,6], gain:.38}, {type:'sine', oct:1, gain:.16}, {type:'sine', oct:1, semi:7, gain:.1, rootOnly:true}]},
   {id:'orgao', name:'Órgão', desc:'Drawbars com rotativo', cutoff:6000, q:.3, trem:[6.3,.09], level:.8,
     layers:[{wave:'organ', det:[0,4], gain:.26}]},
@@ -740,21 +748,21 @@ const TIMBRES = [
     layers:[{type:'square', det:[-11,11], gain:.1}, {type:'sine', gain:.28}]},
   {id:'cristal', name:'Cristal', desc:'Sinos suaves e claros', cutoff:8000, q:.3, trem:[.23,.25], vib:[3,4], send:.55, level:.8,
     layers:[{wave:'bell', oct:1, det:[-4,4], gain:.24}, {type:'sine', gain:.18}]},
-  {id:'profundo', name:'Profundo', desc:'Escuro, cheio de grave', cutoff:520, q:.8, lfo:[.04,160], level:1.05,
+  {id:'profundo', name:'Profundo', desc:'Escuro, cheio de grave', cutoff:520, q:.8, lfo:[.04,160], shim:.08, level:1.05,
     layers:[{type:'triangle', det:[-5,5], gain:.3}, {type:'sine', oct:-1, gain:.42, rootOnly:true}]},
   // Profundos: ondas suaves (seno/triângulo), filtro baixo e movimento lento — fundo para falar por cima
-  {id:'calmaria', name:'Calmaria', desc:'Escuro e parado, para falar por cima', cutoff:650, q:.4, lfo:[.03,120], chorus:.4, send:.5, level:1.1,
+  {id:'calmaria', name:'Calmaria', desc:'Escuro e parado, para falar por cima', cutoff:650, q:.4, lfo:[.03,120], chorus:.4, send:.5, shim:.08, level:1.1,
     layers:[{type:'sine', det:[-5,5], gain:.42}, {type:'triangle', oct:-1, gain:.3, rootOnly:true}, {type:'triangle', oct:1, gain:.05}]},
-  {id:'manto', name:'Manto', desc:'Quente e macio, sem brilho', cutoff:950, q:.5, lfo:[.05,220], chorus:.6, send:.4, level:1,
+  {id:'manto', name:'Manto', desc:'Quente e macio, sem brilho', cutoff:950, q:.5, lfo:[.05,220], chorus:.6, send:.4, shim:.08, level:1,
     layers:[{type:'triangle', det:[-8,8], gain:.4}, {type:'sine', oct:-1, gain:.32, rootOnly:true}, {type:'sawtooth', det:[-14,14], gain:.05}]},
-  {id:'oceano', name:'Oceano', desc:'Ondas graves que vão e voltam devagar', cutoff:720, q:.9, lfo:[.03,380], trem:[.07,.3], chorus:.7, send:.55, level:1.05,
+  {id:'oceano', name:'Oceano', desc:'Ondas graves que vão e voltam devagar', cutoff:720, q:.9, lfo:[.03,380], trem:[.07,.3], chorus:.7, send:.55, shim:.08, level:1.05,
     layers:[{type:'triangle', det:[-10,10], gain:.36}, {type:'sine', oct:-1, gain:.4, rootOnly:true}, {type:'sawtooth', oct:-1, det:[-6,6], gain:.07}]},
   {id:'veludo', name:'Veludo', desc:'Cordas graves aveludadas', cutoff:1150, q:.4, fenv:[500,3], vib:[4.8,5], lfo:[.08,260], chorus:.5, send:.35, level:.9,
     layers:[{type:'sawtooth', det:[-12,-4,4,12], gain:.12}, {type:'triangle', oct:-1, gain:.26}]},
-  {id:'coralgrave', name:'Coral Grave', desc:'Vozes graves em “ooh”', cutoff:2000, q:.4, vib:[4.4,8], send:.6, chorus:.5, level:1.9,
+  {id:'coralgrave', name:'Coral Grave', desc:'Vozes graves em “ooh”', cutoff:2000, q:.4, vib:[4.4,8], send:.6, chorus:.5, shim:.08, level:1.9,
     formant:[[400, 6, 1], [780, 8, .35], [2500, 10, .1], [260, 3, .45]],
     layers:[{type:'sawtooth', oct:-1, det:[-12,-4,4,12], gain:.35}]},
-  {id:'orgsuave', name:'Órgão Suave', desc:'Flautas macias, sem rotativo', cutoff:2800, q:.3, trem:[4.2,.05], send:.4, level:.85,
+  {id:'orgsuave', name:'Órgão Suave', desc:'Flautas macias, sem rotativo', cutoff:2800, q:.3, trem:[4.2,.05], send:.4, shim:.08, level:.85,
     layers:[{wave:'flute', det:[-3,3], gain:.32}, {wave:'flute', oct:-1, gain:.2, rootOnly:true}]},
   // Inspirados nos estilos mais usados em pads de louvor (Catedral, Juno, feedback de guitarra)
   {id:'catedral', name:'Catedral', desc:'Órgão e coro num salão enorme', cutoff:2400, q:.3, vib:[4.5,5], send:1, chorus:.4, level:1.2,
@@ -763,8 +771,17 @@ const TIMBRES = [
   {id:'juno', name:'Juno', desc:'Synth anos 80 com chorus largo', cutoff:1800, q:.8, fenv:[600,2.5], lfo:[.1,350], chorus:1, level:.9,
     layers:[{type:'sawtooth', det:[-6,6], gain:.17}, {type:'square', oct:-1, gain:.07}]},
   {id:'guitarra', name:'Guitarra Ambiente', desc:'Swell de guitarra com reverb longo', cutoff:2600, q:.6, fenv:[300,7], vib:[5.5,6], chorus:.5, send:.8,
-    shimmerVerb:{level:.12, swell:9}, level:.9,
-    layers:[{type:'sawtooth', det:[-5,5], gain:.12}, {type:'triangle', gain:.25}, {type:'triangle', oct:1, gain:.12}]}
+    shim:.8, level:.7,
+    layers:[{type:'sawtooth', det:[-5,5], gain:.12}, {type:'triangle', gain:.25}, {type:'triangle', oct:1, gain:.12}]},
+  // Estilos de pads de worship (shimmer de oitava no reverb, supersaw macio, piano afogado, sopro afinado)
+  {id:'worship', name:'Shimmer Worship', desc:'Supersaw quente com shimmer subindo, estilo Hillsong', cutoff:2100, q:.5, fenv:[520,5], lfo:[.05,320], chorus:.6, send:.45, shim:1, level:1,
+    layers:[{type:'sawtooth', sup:22, gain:.17}, {type:'triangle', oct:-1, gain:.2, rootOnly:true}]},
+  {id:'aurora', name:'Aurora', desc:'Largo e macio, filtro respirando devagar', cutoff:1350, q:.8, lfo:[.035,430], chorus:.8, send:.6, shim:.55, level:.95,
+    layers:[{type:'sawtooth', sup:32, gain:.14}, {type:'sine', oct:1, gain:.05}, {type:'sine', oct:-1, gain:.22, rootOnly:true}]},
+  {id:'pianoeter', name:'Piano Etéreo', desc:'Piano suave afogado em reverb e shimmer', cutoff:900, q:.4, fenv:[3200,4], trem:[.2,.08], send:.75, shim:.9, level:1,
+    layers:[{wave:'piano', det:[-3,3], gain:.3}, {wave:'piano', oct:1, gain:.09}, {type:'sine', oct:-1, gain:.12, rootOnly:true}]},
+  {id:'sopro', name:'Sopro', desc:'Ar e respiração afinados no acorde', cutoff:7000, q:.3, lfo:[.04,1500], send:.8, shim:.7, chorus:.4, level:.85,
+    layers:[{noise:38, gain:.55}, {noise:60, oct:1, gain:.3}, {type:'sine', gain:.08}]}
 ];
 
 // Notas seguras para o shimmer (acima do pad) e para os toques de synth, por tipo de acorde
@@ -785,7 +802,8 @@ const TEMPLATES = [
 // Profundos primeiro (as teclas 1–0 seguem esta ordem)
 const TCATS = [
   ['fundo', 'Profundos · fundo de pregação', ['calmaria','manto','oceano','veludo','coralgrave','catedral','orgsuave','profundo']],
-  ['atmos', 'Atmosféricos', ['sonho','escuro','evolutivo','analogico','guitarra','juno','atmos','shimmer']],
+  ['worship', 'Worship · shimmer', ['worship','aurora','pianoeter','sopro','sonho','shimmer','guitarra']],
+  ['atmos', 'Atmosféricos', ['escuro','evolutivo','analogico','juno','atmos']],
   ['classico', 'Clássicos', ['quente','cordas','coral','orgao','cristal']]
 ];
 const ORDER = TCATS.flatMap(c => c[2]);
@@ -812,7 +830,7 @@ function normSeq(q){
 }
 
 const DEF = {key:null, timbre:'sonho', chord:'n', oct:0, sub:false, vol:80, bright:62, rev:50, fade:30, order:'chrom',
-             arp:55, fill:45, plucks:30, bpm:72, vari:50, seq:SEQ_DEF, prog:null, songId:null, drumVol:75, drumAmb:60,
+             arp:55, fill:45, plucks:30, shim:45, shimMode:'oct', bpm:72, vari:50, seq:SEQ_DEF, prog:null, songId:null, drumVol:75, drumAmb:60,
              vs:{click:true, guide:true, fills:true, drums:true, bass:true, split:false}};
 
 // Acordes da música: graus por modo — [nome, semitons acima da tônica, qualidade]
@@ -852,7 +870,7 @@ S.prog = normProg(S.prog);
 S.vs = {...DEF.vs, ...(S.vs && typeof S.vs === 'object' ? S.vs : {})};
 
 // Set list: cada música guarda o tom e um retrato dos ajustes de som
-const SONG_FIELDS = ['timbre', 'chord', 'oct', 'sub', 'bpm', 'arp', 'fill', 'plucks', 'vari', 'seq', 'prog'];
+const SONG_FIELDS = ['timbre', 'chord', 'oct', 'sub', 'bpm', 'arp', 'fill', 'plucks', 'shim', 'shimMode', 'vari', 'seq', 'prog'];
 let SET = [];
 try { SET = JSON.parse(localStorage.getItem('pads-louvor-set') || '[]'); if (!Array.isArray(SET)) SET = []; } catch(e) {}
 const curSong = () => SET.find(s => s.id === S.songId) || null;
@@ -867,7 +885,7 @@ function save(){
 
 // ---------- Áudio ----------
 let ctx, bus, tone, dry, wet, conv, master, comp, analyser, waves = {}, noiseBuf;
-let motionOut, arpGain, pluckGain, seqGain, seqBass, dlL, dlR, chorusIn, musicPan, clickOut, clickPan, vsBassOut;
+let motionOut, arpGain, pluckGain, seqGain, seqBass, dlL, dlR, chorusIn, musicPan, clickOut, clickPan, vsBassOut, shimBus, shimOut;
 let voice = null;
 
 function initAudio(){
@@ -876,12 +894,14 @@ function initAudio(){
   bus = ctx.createGain();
   tone = ctx.createBiquadFilter(); tone.type = 'lowpass'; tone.Q.value = .3;
   dry = ctx.createGain(); wet = ctx.createGain();
-  conv = ctx.createConvolver(); conv.buffer = makeIR(6);
+  conv = ctx.createConvolver(); conv.buffer = makeIR2(ctx, 6.5, .42);
+  // Retorno do reverb sem grave: a cauda fica grande sem embolar o som (como nas mesas de louvor)
+  const revHP = ctx.createBiquadFilter(); revHP.type = 'highpass'; revHP.frequency.value = 140; revHP.Q.value = .5;
   master = ctx.createGain();
   comp = ctx.createDynamicsCompressor();
   comp.threshold.value = -16; comp.ratio.value = 3; comp.attack.value = .05; comp.release.value = .4;
   analyser = ctx.createAnalyser(); analyser.fftSize = 2048;
-  bus.connect(tone); tone.connect(dry); tone.connect(conv); conv.connect(wet);
+  bus.connect(tone); tone.connect(dry); tone.connect(conv); conv.connect(revHP); revHP.connect(wet);
   dry.connect(master); wet.connect(master); master.connect(comp); comp.connect(analyser);
   // VS: música e click/guia podem ir para lados diferentes do fone
   musicPan = ctx.createStereoPanner ? ctx.createStereoPanner() : ctx.createGain();
@@ -892,6 +912,12 @@ function initAudio(){
   waves.organ = harmonicWave([0, 1, .85, .55, .6, 0, .35, 0, .3, 0, 0, 0, .15]);
   waves.bell  = harmonicWave([0, 1, .05, .5, 0, .28, 0, .14, 0, .07]);
   waves.flute = harmonicWave([0, 1, .3, .1, .04]);
+  waves.piano = harmonicWave([0, 1, .5, .22, .14, .06, .04, .02, .015]);
+  waves.saws = Array.from({length: 8}, () => randomSaw(ctx));
+  waves.squares = Array.from({length: 4}, () => randomSaw(ctx, true));
+  // Shimmer de verdade: o reverb realimenta através de um pitch shifter de +1 oitava
+  shimBus = makeShimmerBus(ctx, {sec: 5, fb: .5});
+  shimOut = ctx.createGain(); shimBus.output.connect(shimOut); shimOut.connect(master);
 
   // Chorus estéreo: dois delays curtos modulados, um para cada lado
   chorusIn = ctx.createGain();
@@ -912,6 +938,7 @@ function initAudio(){
   const mIn = ctx.createGain();
   motionOut = ctx.createGain(); motionOut.gain.value = 0;
   arpGain.connect(mIn); pluckGain.connect(mIn);
+  const arpShim = ctx.createGain(); arpShim.gain.value = .45; arpGain.connect(arpShim); arpShim.connect(shimBus.input);
   // Sequência: notas passam pelo delay; o baixo vai direto (delay no grave embola)
   seqGain = ctx.createGain(); seqGain.connect(mIn);
   seqBass = ctx.createGain(); seqBass.connect(motionOut);
@@ -955,6 +982,87 @@ function makeIR(sec){
   }
   return buf;
 }
+// Pitch shifter por linhas de atraso (técnica do "Jungle"): o atraso varre uma janela em rampa
+// (mais curto = mais agudo) e duas cabeças defasadas meia volta se alternam com crossfade
+function makeShifter(ac, semi, win){
+  win = win || .1;
+  const ratio = Math.pow(2, semi / 12), rate = Math.abs(1 - ratio), period = win / rate;
+  const sr = ac.sampleRate, len = Math.max(64, Math.round(period * sr));
+  const ramp = ac.createBuffer(1, len, sr), fade = ac.createBuffer(1, len, sr);
+  const rd = ramp.getChannelData(0), fd = fade.getChannelData(0);
+  for (let i = 0; i < len; i++){
+    const x = i / len;
+    rd[i] = ratio > 1 ? 1 - x : x;      // subir: o atraso encolhe; descer: cresce
+    fd[i] = Math.sin(Math.PI * x);      // janela: zero onde a rampa salta
+  }
+  const input = ac.createGain(), output = ac.createGain(), srcs = [];
+  for (const off of [0, .5]){
+    const d = ac.createDelay(1); d.delayTime.value = .004;
+    const depth = ac.createGain(); depth.gain.value = win;
+    const g = ac.createGain(); g.gain.value = 0;
+    const r = ac.createBufferSource(); r.buffer = ramp; r.loop = true;
+    const f = ac.createBufferSource(); f.buffer = fade; f.loop = true;
+    r.connect(depth); depth.connect(d.delayTime); f.connect(g.gain);
+    input.connect(d); d.connect(g); g.connect(output);
+    srcs.push([r, off * period], [f, off * period]);
+  }
+  const t = ac.currentTime + .01;
+  srcs.forEach(([s, o]) => s.start(t, o));
+  return {input, output};
+}
+// Reverb: pré-atraso, reflexões iniciais e cauda densa em que os agudos morrem antes dos graves
+function makeIR2(ac, sec, bright){
+  const sr = ac.sampleRate, len = Math.floor(sr * sec), buf = ac.createBuffer(2, len, sr);
+  const pre = Math.floor(sr * .02);
+  for (let ch = 0; ch < 2; ch++){
+    const d = buf.getChannelData(ch);
+    // reflexões iniciais esparsas nos primeiros 90 ms
+    for (let k = 0; k < 14; k++){
+      const i = pre + Math.floor(Math.random() * sr * .09);
+      d[i] += (Math.random() < .5 ? -1 : 1) * (.5 + Math.random() * .5) * (1 - k / 18) * .6;
+    }
+    let lp = 0, lp2 = 0;
+    for (let i = pre; i < len; i++){
+      const t = (i - pre) / sr, n = Math.random() * 2 - 1;
+      const env = Math.exp(-6.9 * t / sec);                 // -60 dB no fim
+      const dens = Math.min(1, t / .06);                    // a cauda vai ficando densa
+      // filtro que escurece com o tempo: os agudos decaem mais rápido
+      const k = Math.max(.02, (bright || .45) * Math.exp(-t / (sec * .35)));
+      lp += k * (n - lp); lp2 += .5 * (lp - lp2);
+      d[i] += lp2 * env * dens * 1.6;
+    }
+  }
+  return buf;
+}
+// Barramento de shimmer (Eno/Lanois): reverb longo com +12 dentro da realimentação; +19 e -12 opcionais
+function makeShimmerBus(ac, opts){
+  const input = ac.createGain(), sum = ac.createGain(), output = ac.createGain();
+  const verb = ac.createConvolver(); verb.buffer = makeIR2(ac, opts.sec || 4.5, .5);
+  const hp = ac.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 450; hp.Q.value = .5;
+  const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 6500; lp.Q.value = .4;
+  const fb = ac.createGain(); fb.gain.value = opts.fb;
+  const loopDelay = ac.createDelay(1); loopDelay.delayTime.value = .09;
+  const up = makeShifter(ac, 12, .1), fifth = makeShifter(ac, 19, .08), sub = makeShifter(ac, -12, .1);
+  const fifthG = ac.createGain(), subG = ac.createGain(); fifthG.gain.value = 0; subG.gain.value = 0;
+  input.connect(sum); sum.connect(verb); verb.connect(output);
+  verb.connect(hp); hp.connect(up.input); hp.connect(fifth.input); verb.connect(sub.input);
+  up.output.connect(lp); fifth.output.connect(fifthG); fifthG.connect(lp);
+  sub.output.connect(subG); subG.connect(output);   // a oitava abaixo não realimenta (embolaria o grave)
+  lp.connect(fb); fb.connect(loopDelay); loopDelay.connect(sum);
+  return {input, output, fb, fifthG, subG};
+}
+// Dente de serra com as fases dos harmônicos sorteadas: várias vozes desafinadas não “faseiam” juntas no ataque
+function randomSaw(ac, square){
+  const n = 64, real = new Float32Array(n), imag = new Float32Array(n);
+  for (let k = 1; k < n; k++){
+    if (square && k % 2 === 0) continue;
+    const a = 1 / k, ph = Math.random() * Math.PI * 2;
+    real[k] = a * Math.cos(ph); imag[k] = a * Math.sin(ph);
+  }
+  return ac.createPeriodicWave(real, imag);
+}
+// Saturação suave (ganho 1 em volume baixo, arredonda só os picos): o calor de um synth analógico
+const tanhCurve = (() => { const c = new Float32Array(1024); for (let i = 0; i < 1024; i++) c[i] = Math.tanh((i / 1023 * 2 - 1) * 1.4) / 1.4; return c; })();
 const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
 const fadeSec = () => S.fade / 10;
 
@@ -980,6 +1088,11 @@ function applyMix(instant){
   drumBus.gain.setTargetAtTime(Math.pow(S.drumVol / 100, 1.3) * 1.1, t, k);
   const amb = S.drumAmb / 100;   // ambiência da bateria: sala + reverb longo
   drumRoomOut.gain.setTargetAtTime(.25 + amb * 1.1, t, k); drumRev.gain.setTargetAtTime(.15 + amb * 1.1, t, k);
+  const sh = S.shim / 100;   // quantidade de shimmer: volume e quanto a cauda continua subindo
+  shimOut.gain.setTargetAtTime(sh, t, k);
+  shimBus.fb.gain.setTargetAtTime(.3 + .4 * sh, t, .3);
+  shimBus.fifthG.gain.setTargetAtTime(S.shimMode === 'oct5' ? .5 : 0, t, .3);
+  shimBus.subG.gain.setTargetAtTime(S.shimMode === 'sub' ? .55 : 0, t, .3);
   const split = S.vs.split && musicPan.pan;
   if (musicPan.pan){ musicPan.pan.setTargetAtTime(split ? 1 : 0, t, k); clickPan.pan.setTargetAtTime(split ? -1 : 0, t, k); }
   const dt = Math.min(2.9, 60 / S.bpm * .75);   // colcheia pontuada
@@ -999,7 +1112,14 @@ class Voice {
     this.out = N(ctx.createGain()); this.out.gain.value = 0;
     const trem = N(ctx.createGain()); trem.gain.value = 1;
     const filt = N(ctx.createBiquadFilter()); filt.type = 'lowpass'; filt.frequency.value = T.cutoff; filt.Q.value = T.q;
-    filt.connect(trem); trem.connect(this.out); this.out.connect(bus);
+    // Segundo polo do filtro (corte mais suave, como um filtro de 24 dB), grave limpo e saturação leve
+    const filt2 = N(ctx.createBiquadFilter()); filt2.type = 'lowpass'; filt2.frequency.value = Math.min(16000, T.cutoff * 1.8); filt2.Q.value = .5;
+    const hp = N(ctx.createBiquadFilter()); hp.type = 'highpass'; hp.frequency.value = 55; hp.Q.value = .5;
+    const sat = N(ctx.createWaveShaper()); sat.curve = tanhCurve; sat.oversample = '2x';
+    filt.connect(filt2); filt2.connect(hp); hp.connect(sat); sat.connect(trem); trem.connect(this.out); this.out.connect(bus);
+    // Envio para o shimmer (reverb com oitava acima realimentando)
+    const shimAmt = T.shim !== undefined ? T.shim : .25;
+    if (shimAmt > 0){ const ss = N(ctx.createGain()); ss.gain.value = shimAmt; this.out.connect(ss); ss.connect(shimBus.input); }
     // Saída só de reverb (shimmer, ar), com o mesmo envelope de fade da voz
     this.wetOut = N(ctx.createGain()); this.wetOut.gain.value = 0; this.wetOut.connect(conv);
     if (T.send){ const s = N(ctx.createGain()); s.gain.value = T.send; this.out.connect(s); s.connect(conv); }
@@ -1051,10 +1171,26 @@ class Voice {
     notes.forEach((m, ni) => {
       T.layers.forEach(L => {
         if (L.rootOnly && ni !== 0) return;
-        const dets = L.det || [0];
+        // sup = supersaw: 7 vozes espalhadas (curva parecida com a do JP-8000), em cents
+        const dets = L.sup ? [-1, -.62, -.31, 0, .29, .6, .98].map(x => x * L.sup) : (L.det || [0]);
+        if (L.noise){   // sopro: ruído passando por um filtro bem estreito na altura da nota
+          const src = ctx.createBufferSource(); src.buffer = noiseBuf; src.loop = true;
+          src.playbackRate.value = .97 + Math.random() * .06;
+          const f = mtof(m + (L.oct || 0) * 12);
+          const bp = N(ctx.createBiquadFilter()); bp.type = 'bandpass'; bp.Q.value = L.noise; bp.frequency.value = f;
+          // o filtro estreito deixa passar pouca energia: compensa pela largura da banda
+          const g = N(ctx.createGain()); g.gain.value = L.gain * noteGain * .3 / Math.sqrt(f / L.noise / (ctx.sampleRate / 2));
+          src.connect(bp); bp.connect(g);
+          if (canPan){ const p = N(ctx.createStereoPanner()); p.pan.value = (ni % 2 ? 1 : -1) * .4; g.connect(p); p.connect(filt); } else g.connect(filt);
+          src.start(now, Math.random() * 2); this.oscs.push(src);
+          return;
+        }
         dets.forEach((d, di) => {
           const o = ctx.createOscillator();
-          if (L.wave) o.setPeriodicWave(waves[L.wave]); else o.type = L.type;
+          if (L.wave) o.setPeriodicWave(waves[L.wave]);
+          else if (L.type === 'sawtooth') o.setPeriodicWave(pick(waves.saws));   // fases sorteadas: sem “phasing” no ataque
+          else if (L.type === 'square') o.setPeriodicWave(pick(waves.squares));
+          else o.type = L.type;
           o.frequency.value = mtof(m + (L.oct || 0) * 12 + (L.semi || 0));
           o.detune.value = d + (Math.random() - .5) * 3;
           // Nas vozes, cada cantor tem seu próprio vibrato (velocidade e profundidade); nos outros, um só
@@ -1078,21 +1214,6 @@ class Voice {
       const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = mtof(base - 12);
       const g = N(ctx.createGain()); g.gain.value = .32;
       o.connect(g); g.connect(this.out); o.start(now); this.oscs.push(o);
-    }
-
-    // Reverb shimmer: oitava, quinta acima e duas oitavas crescendo devagar dentro do reverb
-    if (T.shimmerVerb){
-      const sv = T.shimmerVerb, sg = N(ctx.createGain());
-      sg.gain.setValueAtTime(0, now); sg.gain.linearRampToValueAtTime(sv.level, now + sv.swell);
-      sg.connect(this.wetOut);
-      const sd = N(ctx.createGain()); sd.gain.value = .12; sg.connect(sd); sd.connect(this.out);
-      lfo(.09, sv.level * .4, sg.gain);
-      [12, 19, 24].forEach(iv => [-6, 6].forEach(d => {
-        const o = ctx.createOscillator(); o.type = 'sine';
-        o.frequency.value = mtof(base + iv); o.detune.value = d;
-        const g = N(ctx.createGain()); g.gain.value = iv === 24 ? .1 : .35;
-        o.connect(g); g.connect(sg); o.start(now); this.oscs.push(o);
-      }));
     }
 
     // Preenchimento: camada larga uma oitava acima + ar filtrado, com muito reverb
@@ -2392,7 +2513,8 @@ function sanitize(s){
   if (!CHORDS.some(c => c.id === s.chord)) s.chord = 'n';
   if (![-1, 0, 1].includes(s.oct)) s.oct = 0;
   s.sub = !!s.sub;
-  for (const f of ['arp', 'fill', 'plucks', 'vari']) if (typeof s[f] !== 'number') s[f] = S[f];
+  for (const f of ['arp', 'fill', 'plucks', 'shim', 'vari']) if (typeof s[f] !== 'number') s[f] = S[f];
+  if (!['oct', 'oct5', 'sub'].includes(s.shimMode)) s.shimMode = S.shimMode;
   s.seq = normSeq(s.seq);
   s.prog = normProg(s.prog);
   return s;
@@ -2814,7 +2936,7 @@ $('seqVol').addEventListener('input', e => {
   S.seq.vol = +e.target.value; $('seqVolOut').textContent = S.seq.vol + '%';
   applyMix(false); save();
 });
-const SLIDERS = ['vol', 'bright', 'rev', 'fade', 'arp', 'fill', 'plucks', 'bpm', 'vari', 'drumVol', 'drumAmb'];
+const SLIDERS = ['vol', 'bright', 'rev', 'fade', 'arp', 'fill', 'plucks', 'shim', 'bpm', 'vari', 'drumVol', 'drumAmb'];
 // Drum pads: toca no toque (pointerdown) para responder rápido; teclado/leitor de tela usam o click
 let editSounds = false, samplePad = null;
 function renderPadGrids(){
@@ -2883,13 +3005,20 @@ $('btnFill').onclick = queueFill;
 function fmt(id){
   if (id === 'fade') return (S.fade / 10).toFixed(1).replace('.', ',') + ' s';
   if (id === 'bpm') return S.bpm + ' BPM';
-  if (['arp', 'fill', 'plucks'].includes(id) && S[id] === 0) return 'desligado';
+  if (['arp', 'fill', 'plucks', 'shim'].includes(id) && S[id] === 0) return 'desligado';
   return S[id] + '%';
 }
+const SHIM_MODES = [['oct', '+ Oitava'], ['oct5', '+ Oitava e quinta'], ['sub', '+ Oitava e grave']];
+$('shimMode').addEventListener('click', e => {
+  const b = e.target.closest('[data-sm]'); if (!b) return;
+  S.shimMode = b.dataset.sm; applyMix(false); save(); syncCards();
+});
 function syncCards(){
   $('cardArp').classList.toggle('on', S.arp > 0);
   $('cardFill').classList.toggle('on', S.fill > 0);
   $('cardPlucks').classList.toggle('on', S.plucks > 0);
+  $('cardShim').classList.toggle('on', S.shim > 0);
+  $('shimMode').innerHTML = SHIM_MODES.map(([v, n]) => `<button data-sm="${v}" aria-pressed="${S.shimMode === v}">${n}</button>`).join('');
 }
 
 $('keys').addEventListener('click', e => { const b = e.target.closest('[data-k]'); if (b) pressKey(+b.dataset.k); });
@@ -3009,6 +3138,7 @@ const MIDI_ACTIONS = [
   {id:'vol', name:'Volume', cc:true},      {id:'bright', name:'Brilho', cc:true},
   {id:'rev', name:'Reverb', cc:true},      {id:'arp', name:'Shimmer rítmico', cc:true},
   {id:'fill', name:'Preenchimento', cc:true}, {id:'plucks', name:'Toques de synth', cc:true},
+  {id:'shim', name:'Shimmer (reverb)', cc:true},
   {id:'seqVol', name:'Volume da sequência', cc:true},
   {id:'fill', name:'Virada (bateria)'},    {id:'stopfx', name:'Parar FX'},    {id:'groove', name:'Liga/desliga groove'},
   {id:'drumVol', name:'Volume da bateria', cc:true}, {id:'drumAmb', name:'Ambiência da bateria', cc:true}
