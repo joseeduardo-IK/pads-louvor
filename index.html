@@ -2113,15 +2113,22 @@ const SECTION_RE = /^\s*(intro(?:dução)?|refr[ãa]o|coro|ponte|verso|estrofe|(
 function analyzeCifra(text){
   const lines = text.split(/\r?\n/);
   const parts = [], seen = {};
-  let cur = null, tom = null, title = '';
+  let cur = null, tom = null, title = '', lyric = '', oneLine = null;
   const sec = name => {
     const k = name.toLowerCase().trim();
-    if (seen[k]) { cur = {skip:true, chords:[]}; return; }   // repetição de uma parte já vista
+    // Repetição de uma parte já vista: só vira parte nova se trouxer acordes diferentes
+    if (seen[k]) { cur = {name: name.trim(), chords: [], dupOf: seen[k]}; parts.push(cur); return; }
     cur = {name: name.trim(), chords: [], skip: /tab/i.test(name)};
     seen[k] = cur; parts.push(cur);
   };
   for (const raw of lines){
     const line = raw.replace(/\t/g, '    ');
+    if (!line.trim()){ oneLine = null; continue; }
+    if (oneLine){   // continuação de "[Solo] A B E" na linha de baixo
+      const cs = chordLine(line);
+      if (cs){ oneLine.chords.push(...cs); continue; }
+      oneLine = null;
+    }
     const tm = line.match(/\b[Tt]om\s*:\s*([A-G])([#b]?)(m?)(?![a-z])/);
     if (tm && !tom) { tom = {pc: (LETTER[tm[1]] + (tm[2] === '#' ? 1 : tm[2] === 'b' ? -1 : 0) + 12) % 12, mode: tm[3] ? 'min' : 'maj'}; continue; }
     // Acordes no meio da letra: "[C]Senhor eu [G]venho"
@@ -2131,7 +2138,7 @@ function analyzeCifra(text){
     if (br){
       sec(br[1]);
       const rest = line.slice(line.indexOf(']') + 1), cs = rest.trim() && chordLine(rest);
-      if (cs){ cur.chords.push(...cs); if (/intro|final|solo|interl/i.test(br[1])) cur = null; }   // parte de uma linha só
+      if (cs){ cur.chords.push(...cs); if (/intro|final|solo|interl/i.test(br[1])){ oneLine = cur; cur = null; } }   // parte de uma linha só
       continue;
     }
     const cs = chordLine(line);
@@ -2139,12 +2146,20 @@ function analyzeCifra(text){
     if (SECTION_RE.test(line)){ sec(line.replace(/:\s*$/, '')); continue; }
     const lm = line.match(/^\s*([^:]{3,30}):\s*(.+)$/);   // "Intro: G D Em C"
     if (lm && SECTION_RE.test(lm[1]) && chordLine(lm[2])){ sec(lm[1]); cur.chords.push(...chordLine(lm[2])); cur = null; continue; }
-    if (!title && line.trim() && !cur && line.trim().length < 70) title = line.trim();
+    if (!title && !cur && line.trim().length < 70) title = line.trim();
+    else if (!lyric && cur) lyric = line.trim().replace(/[,.;:!?]+$/, '');   // sem título, a 1ª linha da letra vira o nome
+  }
+  const count = {};
+  for (const p of parts){
+    if (!p.dupOf) continue;
+    const orig = new Set(p.dupOf.chords.map(c => c.name));
+    if (p.chords.every(c => orig.has(c.name))) p.skip = true;
+    else { const k = p.dupOf.name.toLowerCase(); count[k] = (count[k] || 1) + 1; p.name += ' ' + count[k]; }
   }
   const all = parts.filter(p => !p.skip).flatMap(p => p.chords);
   if (!all.length) return null;
   const key = tom ? {...tom, from:'tom'} : {...detectKey(all), from:'acordes'};
-  return {key, parts: parts.filter(p => !p.skip && p.chords.length), title};
+  return {key, parts: parts.filter(p => !p.skip && p.chords.length), title: title || lyric};
 }
 // Pontua as 24 tonalidades: acordes do campo harmônico somam, os de fora tiram; primeiro e último acorde pesam
 function detectKey(all){
@@ -2169,10 +2184,11 @@ function romanOf(c, k, mode){
   const e = pal.find(p => p[1] === off && p[2] === c.q) || pal.find(p => p[1] === off);
   return e ? e[0] : null;
 }
-// Menor ciclo que se repete na parte (G D Em C G D Em C → G D Em C), no máximo 8 acordes
+// Menor ciclo que se repete na parte (G D Em C G D Em C → G D Em C), no máximo 8 acordes.
+// Basta repetir duas vezes seguidas no começo; o fim da parte pode variar.
 function loopOf(seq){
   for (let p = 1; p <= Math.min(8, seq.length); p++)
-    if (seq.length >= 2 * p && seq.every((x, i) => x === seq[i % p])) return seq.slice(0, p);
+    if (seq.length >= 2 * p && seq.slice(0, 2 * p).every((x, i) => x === seq[i % p])) return seq.slice(0, p);
   return seq.slice(0, 8);
 }
 function partProg(part, k, mode){
